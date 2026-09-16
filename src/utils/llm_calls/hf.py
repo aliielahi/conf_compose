@@ -64,12 +64,14 @@ class HFLocal(BaseLLM):
         if not len(prompts) == len(continuations) == len(prefixes):
             raise ValueError("prompts, continuations and prefixes must have equal length")
         contexts = [self.render(*normalize_prompt(p, system)) + prefix for p, prefix in zip(prompts, prefixes)]
+        requests = list(zip(contexts, continuations))
+        unique = sorted(set(requests), key=lambda r: len(r[0]) + len(r[1]), reverse=True)
         batch_size = batch_size or self.batch_size
-        scores: List[List[float]] = []
-        for start in range(0, len(contexts), batch_size):
-            batch = slice(start, start + batch_size)
-            scores += self._score_batch(contexts[batch], continuations[batch])
-        return scores
+        scored: Dict[Tuple[str, str], List[float]] = {}
+        for start in range(0, len(unique), batch_size):
+            batch = unique[start:start + batch_size]
+            scored.update(zip(batch, self._score_batch([c for c, _ in batch], [t for _, t in batch])))
+        return [scored[r] for r in requests]
 
     def _score_batch(self, contexts: Sequence[str], continuations: Sequence[str]) -> List[List[float]]:
         texts = [context + continuation for context, continuation in zip(contexts, continuations)]
@@ -100,44 +102,55 @@ class HFLocal(BaseLLM):
         out: List[List[Optional[Generation]]] = [[None] * n for _ in conversations]
         pending = []
         for i, (system, messages) in enumerate(conversations):
-            for sample in range(n):
-                key = self.cache_key(system, messages, params, sample) if self.cache else None
+            keys = [self.cache_key(system, messages, params, s) if self.cache else None for s in range(n)]
+            missing = []
+            for sample, key in enumerate(keys):
                 hit = self.cache.get(key) if key else None
-                if hit is not None:
-                    out[i][sample] = Generation(**hit, cached=True)
+                if hit is None:
+                    missing.append(sample)
                 else:
-                    pending.append((i, sample, key, self.render(system, messages)))
+                    out[i][sample] = Generation(**hit, cached=True)
+            if missing:
+                pending.append((i, missing, keys, self.render(system, messages)))
+        pending.sort(key=lambda item: len(item[3]), reverse=True)
 
+        copies = max((len(item[1]) for item in pending), default=1)
+        sampling = (params.get("temperature") or 0) > 0
+        chunk_size = max(1, self.batch_size // copies) if sampling else self.batch_size
         bar = self._progress_bar(len(pending))
-        for start in range(0, len(pending), self.batch_size):
-            chunk = pending[start:start + self.batch_size]
+        for start in range(0, len(pending), chunk_size):
+            chunk = pending[start:start + chunk_size]
             try:
-                generations = await asyncio.to_thread(self._generate_batch, [c[3] for c in chunk], params)
+                groups = await asyncio.to_thread(self._generate_batch, [item[3] for item in chunk], params, copies)
             except Exception as exc:
-                generations = [self.failed(exc)] * len(chunk)
-            for (i, sample, key, _), generation in zip(chunk, generations):
-                out[i][sample] = generation
-                if key and generation.ok:
-                    self.cache.set(key, generation.to_dict())
+                groups = [[self.failed(exc)] * copies for _ in chunk]
+            for (i, missing, keys, _), group in zip(chunk, groups):
+                for sample, generation in zip(missing, group):
+                    out[i][sample] = generation
+                    if keys[sample] and generation.ok:
+                        self.cache.set(keys[sample], generation.to_dict())
             if bar is not None:
                 bar.update(len(chunk))
         if bar is not None:
             bar.close()
         return out
 
-    def _generate_batch(self, texts: List[str], params: Dict[str, Any]) -> List[Generation]:
+    def _generate_batch(self, texts: List[str], params: Dict[str, Any], copies: int = 1) -> List[List[Generation]]:
         params = dict(params)
         with_logprobs = bool(params.pop("logprobs", False))
         temperature = params.pop("temperature", 0.0) or 0.0
         top_p, top_k = params.pop("top_p", None), params.pop("top_k", None)
+        sampling = temperature > 0
+        per_prompt = copies if sampling else 1
         options: Dict[str, Any] = {
             "max_new_tokens": params.pop("max_tokens", 256),
-            "do_sample": temperature > 0,
+            "do_sample": sampling,
+            "num_return_sequences": per_prompt,
             "pad_token_id": self.tokenizer.pad_token_id,
             "return_dict_in_generate": True,
             "output_scores": with_logprobs,
         }
-        if temperature > 0:
+        if sampling:
             options.update({k: v for k, v in (("temperature", temperature), ("top_p", top_p), ("top_k", top_k))
                             if v is not None})
         if "stop" in params:
@@ -154,23 +167,26 @@ class HFLocal(BaseLLM):
         new_tokens = output.sequences[:, encoded["input_ids"].shape[1]:].tolist()
         transition = (self.hf_model.compute_transition_scores(output.sequences, output.scores, normalize_logits=True)
                       if with_logprobs else None)
+        input_lengths = encoded["attention_mask"].sum(dim=1).tolist()
 
         generations = []
-        for i, ids in enumerate(new_tokens):
+        for row, ids in enumerate(new_tokens):
             stop_at = next((k for k, token in enumerate(ids) if token in self.eos_ids), None)
             ids = ids if stop_at is None else ids[:stop_at]
             generations.append(Generation(
                 text=self.tokenizer.decode(ids, skip_special_tokens=True),
                 model=self.model,
                 finish_reason="length" if stop_at is None else "stop",
-                logprobs=transition[i, :len(ids)].float().tolist() if with_logprobs else None,
+                logprobs=transition[row, :len(ids)].float().tolist() if with_logprobs else None,
                 tokens=self.tokenizer.convert_ids_to_tokens(ids) if with_logprobs else None,
-                input_tokens=int(encoded["attention_mask"][i].sum()),
+                input_tokens=input_lengths[row // per_prompt],
                 output_tokens=len(ids),
             ))
         del encoded, output, transition
         _free_cuda()
-        return generations
+        if sampling:
+            return [generations[j:j + copies] for j in range(0, len(generations), copies)]
+        return [[generation] * copies for generation in generations]
 
 
 def _free_cuda() -> None:

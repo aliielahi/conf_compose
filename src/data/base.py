@@ -28,8 +28,7 @@ class Task:
     hf_config: Optional[str] = None
     validation_source: str = "train"
     val_size: int = 1000
-    instruction: str = ""
-    answer_prefix: str = ""
+    prompts: Any = None
 
     def load(self, split: str = "test", n: Optional[int] = None, seed: int = 42) -> List[Example]:
         if split not in ("train", "validation", "test"):
@@ -50,14 +49,15 @@ class Task:
         held_out = set(random.Random(seed).sample(range(len(rows)), min(self.val_size, len(rows))))
         return [row for row in rows if (row[0] in held_out) == (split == "validation")]
 
+    @property
+    def answer_prefix(self) -> str:
+        return self.prompts.answer_prefix
+
     def prompt(self, example: Example) -> str:
-        return self.format(example.question)
+        return self.prompts.solve(question=example.question)
 
-    def null_prompt(self, null_input: str = "N/A") -> str:
-        return self.format(null_input)
-
-    def format(self, question: str) -> str:
-        return f"{question}\n\n{self.instruction}"
+    def null_prompt(self, null_input: str) -> str:
+        return self.prompts.solve(question=null_input)
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:
         raise NotImplementedError

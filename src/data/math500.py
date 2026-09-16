@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
+from prompts import BoxedReasoning
+
 from .base import Answer, Example, Task
 
 
@@ -37,8 +39,7 @@ class MATH500(Task):
     hf_path = "HuggingFaceH4/MATH-500"
     validation_source = "test"
     val_size = 100
-    instruction = "Solve the problem step by step. Put your final answer within \\boxed{}."
-    answer_prefix = "The final answer is \\boxed{"
+    prompts = BoxedReasoning
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:
         return Example(id=row["unique_id"], question=row["problem"], answer=row["answer"],

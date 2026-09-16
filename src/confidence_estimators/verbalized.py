@@ -7,11 +7,7 @@ import statistics
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
-DEFAULT_PROMPT = (
-    "Rate your confidence in your final answer on a scale from 0 to 10, where 0 means you are guessing "
-    "randomly, 5 means you are somewhat confident but unsure, and 10 means you are almost certain it is "
-    "correct. Only output one integer in the [0, 10] range."
-)
+from prompts import VerbalizedPrompts
 
 _SCORE = re.compile(r"(\d+(?:\.\d+)?)\s*(%|/\s*(?:10|100)\b)?")
 
@@ -42,8 +38,8 @@ def parse_confidence(text: str, scale: float = 10) -> Optional[float]:
 
 
 class VerbalizedConfidence:
-    def __init__(self, llm, prompt: str = DEFAULT_PROMPT, repeats: int = 3, temperature: float = 0.3,
-                 max_tokens: int = 8, scale: float = 10, system: Optional[str] = None):
+    def __init__(self, llm, prompt: str = VerbalizedPrompts.rate(), repeats: int = 3,
+                 temperature: float = 0.3, max_tokens: int = 8, scale: float = 10, system: Optional[str] = None):
         self.llm = llm
         self.prompt = prompt
         self.repeats = repeats

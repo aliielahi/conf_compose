@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
+from prompts import NumericReasoning
+
 from .base import Answer, Example, Task
 
 _NUMBER = r"-?(?:\$\s*)?\d[\d,]*(?:\.\d+)?|-?\.\d+"
@@ -21,8 +23,7 @@ def normalize_number(text: str) -> Optional[float]:
 
 
 class NumericTask(Task):
-    instruction = "Solve the problem step by step. End your response with \"The answer is <number>.\""
-    answer_prefix = "The answer is "
+    prompts = NumericReasoning
 
     def extract_answer(self, response: str) -> Optional[Answer]:
         matches = list(_CUE.finditer(response))

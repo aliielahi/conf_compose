@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
+from prompts import ContentFreeInputs
+
 SCOPES = ("answer", "answer_no_reasoning", "response")
 
 
@@ -29,7 +31,7 @@ def _logmeanexp(values: Sequence[float]) -> float:
 
 class SequenceProbability:
     def __init__(self, llm, scope: str = "answer", debias: bool = True,
-                 null_inputs: Sequence[str] = ("N/A", "", "[MASK]"), system: Optional[str] = None):
+                 null_inputs: Sequence[str] = ContentFreeInputs.inputs, system: Optional[str] = None):
         if scope not in SCOPES:
             raise ValueError(f"scope must be one of {SCOPES}")
         if not hasattr(llm, "score"):
