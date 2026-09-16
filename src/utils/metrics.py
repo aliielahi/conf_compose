@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Tuple
+from typing import Callable, Dict, Sequence, Tuple
 
 import numpy as np
 
@@ -91,6 +91,15 @@ def summarize(conf: Sequence[float], correct: Sequence[float], n_bins: int = 10)
         "auarc": auarc(conf, correct),
         "oracle_auarc": oracle_auarc(correct),
     }
+
+
+def bootstrap_ci(metric: Callable[[np.ndarray, np.ndarray], float], conf: Sequence[float],
+                 correct: Sequence[float], n_boot: int = 1000, alpha: float = 0.05, seed: int = 0) -> Tuple[float, float]:
+    conf, correct = _arrays(conf, correct)
+    samples = np.random.default_rng(seed).integers(0, len(conf), (n_boot, len(conf)))
+    values = np.array([metric(conf[s], correct[s]) for s in samples])
+    values = values[np.isfinite(values)]
+    return tuple(np.quantile(values, [alpha / 2, 1 - alpha / 2])) if len(values) else (float("nan"), float("nan"))
 
 
 def _average_ranks(values: np.ndarray) -> np.ndarray:

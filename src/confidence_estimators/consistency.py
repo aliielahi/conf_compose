@@ -56,7 +56,9 @@ class ConsistencyConfidence:
             responses = responses if isinstance(responses, list) else [responses]
             answers = [answer.text if (answer := task.extract_answer(r)) else None for r in responses]
             valid = [a for a in answers if a is not None]
-            agreement = None if prediction is None else sum(task.equivalent(a, prediction) for a in valid) / len(answers)
+            agreement = None
+            if prediction is not None:
+                agreement = sum(task.equivalent(a, prediction) for a in valid) / len(answers)
             results.append(ConsistencyResult(answers, _cluster_sizes(task, valid), agreement))
         return results
 

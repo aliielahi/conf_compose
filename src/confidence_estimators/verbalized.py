@@ -34,12 +34,12 @@ def parse_confidence(text: str, scale: float = 10) -> Optional[float]:
 
 class VerbalizedConfidence:
     def __init__(self, llm, prompt: str = VerbalizedPrompts.rate(), repeats: int = 3,
-                 temperature: float = 0.3, max_tokens: int = 8, scale: float = 10, system: Optional[str] = None):
+                 temperature: float = 0.3, top_p: float = 1.0, top_k: int = 0, max_tokens: int = 8,
+                 scale: float = 10, system: Optional[str] = None):
         self.llm = llm
         self.prompt = prompt
         self.repeats = repeats
-        self.temperature = temperature
-        self.max_tokens = max_tokens
+        self.sampling = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": max_tokens}
         self.scale = scale
         self.system = system
 
@@ -49,8 +49,7 @@ class VerbalizedConfidence:
              {"role": "user", "content": self.prompt}]
             for p, r in zip(prompts, responses, strict=True)
         ]
-        samples = self.llm.prompt(conversations, n=self.repeats, temperature=self.temperature,
-                                  max_tokens=self.max_tokens, system=self.system)
+        samples = self.llm.prompt(conversations, n=self.repeats, system=self.system, **self.sampling)
         results = []
         for raw in samples:
             raw = raw if isinstance(raw, list) else [raw]

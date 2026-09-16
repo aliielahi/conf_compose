@@ -1,57 +1,72 @@
-"""Zero-shot pipeline: answer, grade, and attach every confidence signal to each example."""
+"""Zero-shot pipeline: answer, grade, and attach every configured confidence signal to each example."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from confidence_estimators import ConsistencyConfidence, SequenceProbability, VerbalizedConfidence
+from confidence_estimators import (ConsistencyConfidence, SelfVerification, SequenceProbability,
+                                   VerbalizedConfidence)
 
 
-def run_zero_shot(llm, task, examples, max_tokens: int = 512, scopes: Sequence[str] = ("response",),
-                  debias: bool = True, tail_fraction: float = 0.1, verbalized: bool = True,
-                  verbal_temperature: float = 0.3, consistency_temperatures: Sequence[float] = (),
-                  consistency_samples: int = 5) -> List[Dict[str, Any]]:
+@dataclass
+class ZeroShotConfig:
+    max_tokens: int = 512
+    scopes: Tuple[str, ...] = ("response",)
+    tail_fraction: float = 0.1
+    debias: bool = False
+    verbalized: bool = True
+    verbal_temperature: float = 1.0
+    verbal_repeats: int = 3
+    verification: bool = True
+    consistency_temperatures: Tuple[float, ...] = (0.7,)
+    consistency_samples: int = 10
+    top_p: float = 1.0
+    top_k: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None) -> List[Dict[str, Any]]:
+    config = config or ZeroShotConfig()
     prompts = [task.prompt(example) for example in examples]
-    generations = llm.generate(prompts, max_tokens=max_tokens, temperature=0.0)
+    generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0)
     responses = [generation.text for generation in generations]
+    records = [_record(task, example, generation) for example, generation in zip(examples, generations, strict=True)]
 
-    records = []
-    for example, generation in zip(examples, generations, strict=True):
-        answer = task.extract_answer(generation.text)
-        prediction = answer.text if answer else None
-        records.append({
-            "id": example.id,
-            "gold": example.answer,
-            "prediction": prediction,
-            "correct": task.is_correct(prediction, example),
-            "explicit_answer": bool(answer and answer.explicit),
-            "finish_reason": generation.finish_reason,
-            "response": generation.text,
-            "confidence": {},
-        })
-
-    seq_signals = {"": "confidence", "_min": "min_confidence", f"_tail{round(tail_fraction * 100)}": "tail_confidence"}
-    if debias:
-        seq_signals["_debiased"] = "debiased_confidence"
-    for scope in scopes:
-        estimator = SequenceProbability(llm, scope=scope, debias=debias, tail_fraction=tail_fraction)
+    tail = f"tail{round(config.tail_fraction * 100)}"
+    for scope in config.scopes:
+        estimator = SequenceProbability(llm, scope=scope, debias=config.debias, tail_fraction=config.tail_fraction)
+        signals = {f"seq_{scope}": "confidence", f"seq_{scope}_min": "min_confidence",
+                   f"seq_{scope}_{tail}": "tail_confidence"}
+        if config.debias:
+            signals[f"seq_{scope}_debiased"] = "debiased_confidence"
         for record, result in zip(records, estimator.estimate(task, examples, responses)):
-            for suffix, attribute in seq_signals.items():
-                record["confidence"][f"seq_{scope}{suffix}"] = getattr(result, attribute) if result else None
+            record["confidence"].update({name: getattr(result, attr) if result else None
+                                         for name, attr in signals.items()})
             record.setdefault("token_logprobs", {})[scope] = result.token_logprobs if result else None
 
-    if verbalized:
-        estimator = VerbalizedConfidence(llm, temperature=verbal_temperature)
+    if config.verification:
+        for record, value in zip(records, SelfVerification(llm).estimate(task, examples, responses)):
+            record["confidence"]["verification"] = value
+
+    if config.verbalized:
+        estimator = VerbalizedConfidence(llm, repeats=config.verbal_repeats, temperature=config.verbal_temperature,
+                                         top_p=config.top_p, top_k=config.top_k)
         for record, result in zip(records, estimator.estimate(prompts, responses)):
             record["confidence"]["verbalized"] = result.confidence
             record["verbalized_raw"] = result.raw
 
     predictions = [record["prediction"] for record in records]
-    for temperature in consistency_temperatures:
-        estimator = ConsistencyConfidence(llm, consistency_samples, temperature, max_tokens)
+    for temperature in config.consistency_temperatures:
+        estimator = ConsistencyConfidence(llm, config.consistency_samples, temperature, config.top_p, config.top_k,
+                                          config.max_tokens)
+        name = f"consistency_t{temperature:g}"
         for record, result in zip(records, estimator.estimate(task, examples, predictions)):
-            record["confidence"][f"consistency_t{temperature:g}"] = result.confidence
-            record.setdefault("sampled_answers", {})[f"t{temperature:g}"] = result.answers
+            record["confidence"].update({name: result.agreement, f"{name}_margin": result.margin,
+                                         f"{name}_entropy": result.entropy_confidence})
+            record.setdefault("sampled_answers", {})[name] = result.answers
     return records
 
 
@@ -60,5 +75,19 @@ def signal_names(records: Sequence[Dict[str, Any]]) -> List[str]:
 
 
 def signal(records: Sequence[Dict[str, Any]], name: str, missing: float = 0.0) -> List[float]:
-    values: List[Optional[float]] = [record["confidence"][name] for record in records]
-    return [missing if value is None else value for value in values]
+    return [missing if record["confidence"][name] is None else record["confidence"][name] for record in records]
+
+
+def _record(task, example, generation) -> Dict[str, Any]:
+    answer = task.extract_answer(generation.text)
+    prediction = answer.text if answer else None
+    return {
+        "id": example.id,
+        "gold": example.answer,
+        "prediction": prediction,
+        "correct": task.is_correct(prediction, example),
+        "explicit_answer": bool(answer and answer.explicit),
+        "finish_reason": generation.finish_reason,
+        "response": generation.text,
+        "confidence": {},
+    }

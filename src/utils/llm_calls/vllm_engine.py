@@ -37,6 +37,8 @@ class VLLMLocal(LocalLLM):
         if "stop" in params:
             stop = params.pop("stop")
             options["stop"] = [stop] if isinstance(stop, str) else stop
+        if params.get("top_k") == 0:
+            params["top_k"] = -1
         options.update(params)
 
         prompts = [{"prompt_token_ids": ids} for ids in self.encode(texts)["input_ids"]]

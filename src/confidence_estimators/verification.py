@@ -21,7 +21,8 @@ class SelfVerification:
             raise ValueError("examples and responses must have equal length")
         prompts = [VerificationPrompts.check(question=example.question, response=response)
                    for example, response in zip(examples, responses)]
-        scores = {label: self.llm.score(prompts, [label] * len(prompts), system=self.system) for label in self.labels}
+        scores = {label: self.llm.score(prompts, [label] * len(prompts), system=self.system)
+                  for label in self.labels}
         true_label, false_label = self.labels
         return [_sigmoid(sum(scores[true_label][i]) - sum(scores[false_label][i])) for i in range(len(prompts))]
 
