@@ -17,7 +17,7 @@ except ImportError:
 __all__ = ["LLM", "resolve_model", "BaseLLM", "Generation", "LLMError", "HF_models"]
 
 _ALIASES = {"claude": "anthropic", "google": "gemini", "huggingface": "hf"}
-_NATIVE = {"anthropic", "gemini", "hf", *_ALIASES}
+_NATIVE = {"anthropic", "gemini", "hf", "vllm", *_ALIASES}
 _PREFIXES = (("openai", ("gpt-", "chatgpt", "o1", "o3", "o4")), ("anthropic", ("claude",)), ("gemini", ("gemini",)))
 
 
@@ -44,5 +44,8 @@ def LLM(model: str, **kwargs: Any) -> BaseLLM:
     if provider == "hf":
         from .hf import HFLocal
         return HFLocal(name, **kwargs)
+    if provider == "vllm":
+        from .vllm_engine import VLLMLocal
+        return VLLMLocal(name, **kwargs)
     from .providers import OpenAIChat
     return OpenAIChat(name, provider=provider, **kwargs)

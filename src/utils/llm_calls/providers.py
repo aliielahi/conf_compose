@@ -18,7 +18,7 @@ OPENAI_COMPATIBLE: Dict[str, Tuple[str, Optional[str], bool]] = {
     "xai": ("XAI_API_KEY", "https://api.x.ai/v1", True),
     "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1", True),
     "fireworks": ("FIREWORKS_API_KEY", "https://api.fireworks.ai/inference/v1", True),
-    "vllm": ("VLLM_API_KEY", "http://localhost:8000/v1", False),
+    "vllm-server": ("VLLM_SERVER_API_KEY", "http://localhost:8000/v1", False),
     "ollama": ("OLLAMA_API_KEY", "http://localhost:11434/v1", False),
 }
 
@@ -51,13 +51,13 @@ def _transport_errors() -> Tuple[type, ...]:
 class OpenAIChat(BaseLLM):
     def __init__(self, model: str, *, provider: str = "openai", api_key: Optional[str] = None,
                  base_url: Optional[str] = None, **kwargs: Any):
-        env_key, default_url, key_required = OPENAI_COMPATIBLE.get(
-            provider, (f"{provider.upper()}_API_KEY", None, False))
+        env_prefix = provider.upper().replace("-", "_")
+        env_key, default_url, key_required = OPENAI_COMPATIBLE.get(provider, (f"{env_prefix}_API_KEY", None, False))
         self.provider = provider
         self.api_key = api_key or _env(env_key) or (None if key_required else "not-needed")
         if self.api_key is None:
             raise EnvironmentError(f"set {env_key} to use {provider} models")
-        self.base_url = base_url or _env(f"{provider.upper()}_BASE_URL") or default_url
+        self.base_url = base_url or _env(f"{env_prefix}_BASE_URL") or default_url
         self.max_tokens_field = "max_completion_tokens" if provider == "openai" else "max_tokens"
         super().__init__(model, **kwargs)
 

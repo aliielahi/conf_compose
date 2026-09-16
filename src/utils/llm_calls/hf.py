@@ -1,26 +1,24 @@
-"""Local HuggingFace causal LMs: batched generation and teacher-forced continuation scoring."""
+"""HuggingFace transformers backend: length-sorted static batching for generation and scoring."""
 
 from __future__ import annotations
 
-import asyncio
 import gc
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from .core import BaseLLM, Conversation, Generation, PromptLike, normalize_prompt
-from .hf_models import HF_models
+from .core import Generation
+from .local import LocalLLM
 
 
-class HFLocal(BaseLLM):
+class HFLocal(LocalLLM):
     provider = "hf"
 
     def __init__(self, model: str, *, batch_size: int = 16, dtype: Any = None, device: Optional[str] = None,
-                 apply_chat_template: bool = True, **kwargs: Any):
-        super().__init__(HF_models.get(model, model), **kwargs)
+                 **kwargs: Any):
+        super().__init__(model, **kwargs)
         self.batch_size = batch_size
-        self.apply_chat_template = apply_chat_template
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
@@ -48,37 +46,17 @@ class HFLocal(BaseLLM):
         gc.collect()
         _free_cuda()
 
-    def render(self, system: Optional[str], messages: Conversation) -> str:
-        if not self.apply_chat_template:
-            if system or len(messages) != 1:
-                raise ValueError("system prompts and multi-turn input require apply_chat_template=True")
-            return messages[0]["content"]
-        chat = ([{"role": "system", "content": system}] if system else []) + messages
-        return self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+    def _score_unique(self, contexts: List[str], continuations: List[str]) -> List[List[float]]:
+        scores: List[List[float]] = []
+        for start in range(0, len(contexts), self.batch_size):
+            batch = slice(start, start + self.batch_size)
+            scores += self._score_batch(contexts[batch], continuations[batch])
+        return scores
 
-    def score(self, prompts: Sequence[PromptLike], continuations: Sequence[str],
-              prefixes: Optional[Sequence[str]] = None, system: Optional[str] = None,
-              batch_size: Optional[int] = None) -> List[List[float]]:
-        """Per-token log p(continuation | rendered prompt + assistant prefix), located by character offsets."""
-        prefixes = prefixes if prefixes is not None else [""] * len(prompts)
-        if not len(prompts) == len(continuations) == len(prefixes):
-            raise ValueError("prompts, continuations and prefixes must have equal length")
-        contexts = [self.render(*normalize_prompt(p, system)) + prefix for p, prefix in zip(prompts, prefixes)]
-        requests = list(zip(contexts, continuations))
-        unique = sorted(set(requests), key=lambda r: len(r[0]) + len(r[1]), reverse=True)
-        batch_size = batch_size or self.batch_size
-        scored: Dict[Tuple[str, str], List[float]] = {}
-        for start in range(0, len(unique), batch_size):
-            batch = unique[start:start + batch_size]
-            scored.update(zip(batch, self._score_batch([c for c, _ in batch], [t for _, t in batch])))
-        return [scored[r] for r in requests]
-
-    def _score_batch(self, contexts: Sequence[str], continuations: Sequence[str]) -> List[List[float]]:
-        texts = [context + continuation for context, continuation in zip(contexts, continuations)]
-        encoded = self.tokenizer(texts, return_tensors="pt", padding=True, return_offsets_mapping=True,
-                                 add_special_tokens=not self.apply_chat_template)
-        token_ends = encoded.pop("offset_mapping")[:, :, 1]
-        mask = encoded["attention_mask"].bool()
+    def _score_batch(self, contexts: List[str], continuations: List[str]) -> List[List[float]]:
+        encoded = self.encode([c + t for c, t in zip(contexts, continuations)], return_tensors="pt",
+                              padding=True, return_offsets_mapping=True)
+        token_ends, mask = encoded.pop("offset_mapping")[:, :, 1], encoded["attention_mask"].bool()
         lengths = [int(((token_ends[i] > len(context)) & mask[i]).sum()) for i, context in enumerate(contexts)]
         encoded = encoded.to(self.hf_model.device)
         with torch.no_grad():
@@ -96,46 +74,27 @@ class HFLocal(BaseLLM):
         _free_cuda()
         return scores
 
-    async def _run_batch(self, conversations: List[Tuple[Optional[str], Conversation]],
-                         params: Dict[str, Any], n: int) -> List[List[Generation]]:
-        params = self.effective_params(params)
-        out: List[List[Optional[Generation]]] = [[None] * n for _ in conversations]
-        pending = []
-        for i, (system, messages) in enumerate(conversations):
-            keys = [self.cache_key(system, messages, params, s) if self.cache else None for s in range(n)]
-            missing = []
-            for sample, key in enumerate(keys):
-                hit = self.cache.get(key) if key else None
-                if hit is None:
-                    missing.append(sample)
-                else:
-                    out[i][sample] = Generation(**hit, cached=True)
-            if missing:
-                pending.append((i, missing, keys, self.render(system, messages)))
-        pending.sort(key=lambda item: len(item[3]), reverse=True)
-
-        copies = max((len(item[1]) for item in pending), default=1)
+    def _generate_texts(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:
+        order = sorted(range(len(texts)), key=lambda i: len(texts[i]), reverse=True)
         sampling = (params.get("temperature") or 0) > 0
         chunk_size = max(1, self.batch_size // copies) if sampling else self.batch_size
-        bar = self._progress_bar(len(pending))
-        for start in range(0, len(pending), chunk_size):
-            chunk = pending[start:start + chunk_size]
+        groups: List[Optional[List[Generation]]] = [None] * len(texts)
+        bar = self._progress_bar(len(texts))
+        for start in range(0, len(order), chunk_size):
+            chunk = order[start:start + chunk_size]
             try:
-                groups = await asyncio.to_thread(self._generate_batch, [item[3] for item in chunk], params, copies)
+                results = self._generate_batch([texts[i] for i in chunk], params, copies)
             except Exception as exc:
-                groups = [[self.failed(exc)] * copies for _ in chunk]
-            for (i, missing, keys, _), group in zip(chunk, groups):
-                for sample, generation in zip(missing, group):
-                    out[i][sample] = generation
-                    if keys[sample] and generation.ok:
-                        self.cache.set(keys[sample], generation.to_dict())
+                results = [[self.failed(exc)] * copies for _ in chunk]
+            for i, group in zip(chunk, results):
+                groups[i] = group
             if bar is not None:
                 bar.update(len(chunk))
         if bar is not None:
             bar.close()
-        return out
+        return groups
 
-    def _generate_batch(self, texts: List[str], params: Dict[str, Any], copies: int = 1) -> List[List[Generation]]:
+    def _generate_batch(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:
         params = dict(params)
         with_logprobs = bool(params.pop("logprobs", False))
         temperature = params.pop("temperature", 0.0) or 0.0
@@ -160,8 +119,7 @@ class HFLocal(BaseLLM):
             torch.manual_seed(params.pop("seed"))
         options.update(params)
 
-        encoded = self.tokenizer(texts, return_tensors="pt", padding=True,
-                                 add_special_tokens=not self.apply_chat_template).to(self.hf_model.device)
+        encoded = self.encode(texts, return_tensors="pt", padding=True).to(self.hf_model.device)
         with torch.no_grad():
             output = self.hf_model.generate(**encoded, **options)
         new_tokens = output.sequences[:, encoded["input_ids"].shape[1]:].tolist()

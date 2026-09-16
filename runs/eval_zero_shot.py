@@ -18,12 +18,13 @@ COLUMNS = ("accuracy", "mean_conf", "ece", "ace", "brier", "nll", "auroc", "auar
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="hf/q3-4bi")
+    parser.add_argument("--model", default="vllm/q3-4bi")
     parser.add_argument("--task", default="gsm8k")
     parser.add_argument("--split", default="test")
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--max-tokens", type=int, default=512)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=32, help="hf backend only")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.9, help="vllm backend only")
     parser.add_argument("--scopes", nargs="+", default=["response"])
     parser.add_argument("--tail-fraction", type=float, default=0.1)
     parser.add_argument("--no-verbalized", action="store_true")
@@ -37,7 +38,9 @@ def main():
     start = time.time()
     task = get_task(args.task)
     examples = task.load(args.split, n=args.n)
-    llm = LLM(args.model, batch_size=args.batch_size, cache_dir=args.cache_dir)
+    backend_kwargs = ({"batch_size": args.batch_size} if args.model.startswith("hf/")
+                      else {"gpu_memory_utilization": args.gpu_memory_utilization})
+    llm = LLM(args.model, cache_dir=args.cache_dir, **backend_kwargs)
     print(f"{llm} | {task.name}/{args.split} n={len(examples)} | loaded in {time.time() - start:.0f}s")
 
     records = run_zero_shot(llm, task, examples, max_tokens=args.max_tokens, scopes=args.scopes,
