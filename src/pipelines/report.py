@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Sequence
 
 import numpy as np
+from numpy import nan
 
 from utils.calibration import CALIBRATORS
 from utils.metrics import auarc, auroc, bootstrap_ci, brier, ece, nll
@@ -16,12 +17,13 @@ def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[
                       calibrator: str = "beta", n_boot: int = 1000) -> Dict[str, Dict[str, Any]]:
     test_correct = np.array([record["correct"] for record in test], dtype=float)
     val_correct = np.array([record["correct"] for record in validation], dtype=float)
-    report = {"constant": _reliability(np.full(len(test), val_correct.mean()), test_correct, "cal")}
-    report["constant"].update(auroc=float("nan"), auarc=float(test_correct.mean()), missing=0)
+    report: Dict[str, Dict[str, Any]] = {}
+    if len(validation):
+        report["constant"] = _reliability(np.full(len(test), val_correct.mean()), test_correct, "cal")
+        report["constant"].update(auroc=float("nan"), auarc=float(test_correct.mean()), missing=0)
 
     for name in signal_names(test):
         conf = np.array(signal(test, name))
-        calibrated = CALIBRATORS[calibrator]().fit(signal(validation, name), val_correct).predict(conf)
         row = {
             "auroc": auroc(conf, test_correct),
             "auroc_ci": bootstrap_ci(auroc, conf, test_correct, n_boot),
@@ -30,7 +32,9 @@ def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[
             "missing": sum(record["confidence"][name] is None for record in test),
         }
         row.update(_reliability(conf, test_correct, "raw"))
-        row.update(_reliability(calibrated, test_correct, "cal"))
+        if len(validation):
+            calibrated = CALIBRATORS[calibrator]().fit(signal(validation, name), val_correct).predict(conf)
+            row.update(_reliability(calibrated, test_correct, "cal"))
         report[name] = row
     return report
 
@@ -40,10 +44,11 @@ def format_report(report: Dict[str, Dict[str, Any]]) -> List[str]:
               f"{'cal_ece':>9}{'cal_brier':>10}{'cal_nll':>9}{'missing':>8}")
     lines = [header]
     for name, row in report.items():
-        low, high = row.get("auroc_ci", (float("nan"), float("nan")))
+        low, high = row.get("auroc_ci", (nan, nan))
         lines.append(f"{name:<30}{row['auroc']:>8.3f}{f'[{low:.3f}, {high:.3f}]':>16}{row['auarc']:>8.3f}"
-                     f"{row.get('raw_ece', float('nan')):>9.3f}{row.get('raw_brier', float('nan')):>10.3f}"
-                     f"{row['cal_ece']:>9.3f}{row['cal_brier']:>10.3f}{row['cal_nll']:>9.3f}{row['missing']:>8}")
+                     f"{row.get('raw_ece', nan):>9.3f}{row.get('raw_brier', nan):>10.3f}"
+                     f"{row.get('cal_ece', nan):>9.3f}{row.get('cal_brier', nan):>10.3f}"
+                     f"{row.get('cal_nll', nan):>9.3f}{row['missing']:>8}")
     return lines
 
 

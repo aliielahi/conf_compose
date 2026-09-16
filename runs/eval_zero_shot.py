@@ -18,8 +18,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="vllm/q3-4bi")
     parser.add_argument("--task", default="gsm8k")
-    parser.add_argument("--n-val", type=int, default=300)
-    parser.add_argument("--n-test", type=int, default=500)
+    parser.add_argument("--n-val", type=int, default=0, help="0 skips calibration")
+    parser.add_argument("--n-test", type=int, default=200)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--scopes", nargs="+", default=["response"])
     parser.add_argument("--tail-fraction", type=float, default=0.1)
@@ -48,7 +48,8 @@ def main():
 
     start = time.time()
     task = get_task(args.task)
-    splits = {"validation": task.load("validation", n=args.n_val), "test": task.load("test", n=args.n_test)}
+    splits = {"validation": task.load("validation", n=args.n_val) if args.n_val else [],
+              "test": task.load("test", n=args.n_test)}
     backend_kwargs = ({"batch_size": args.batch_size} if args.model.startswith("hf/")
                       else {"gpu_memory_utilization": args.gpu_memory_utilization})
     llm = LLM(args.model, cache_dir=args.cache_dir, **backend_kwargs)
@@ -57,16 +58,16 @@ def main():
 
     combined = run_zero_shot(llm, task, splits["validation"] + splits["test"], config)
     n_val = len(splits["validation"])
-    records = {"validation": combined[:n_val], "test": combined[n_val:]}
-    report = confidence_report(records["validation"], records["test"], args.calibrator, args.n_boot)
+    records = {split: rows for split, rows in (("validation", combined[:n_val]), ("test", combined[n_val:])) if rows}
+    report = confidence_report(records.get("validation", []), records["test"], args.calibrator, args.n_boot)
 
     for split, rows in records.items():
         accuracy = sum(r["correct"] for r in rows) / len(rows)
         truncated = sum(r["finish_reason"] == "length" for r in rows)
         implicit = sum(r["prediction"] is not None and not r["explicit_answer"] for r in rows)
         print(f"{split}: accuracy={accuracy:.3f} truncated={truncated} implicit_answers={implicit}")
-    print(f"\ntest confidence quality ({args.calibrator} calibration fitted on validation) "
-          f"| {time.time() - start:.0f}s\n")
+    calibration = f"{args.calibrator} calibration fitted on validation" if n_val else "no calibration"
+    print(f"\ntest confidence quality ({calibration}) | {time.time() - start:.0f}s\n")
     print("\n".join(format_report(report)))
 
     out_dir = Path(args.out_dir) / f"{task.name}_{llm.model.replace('/', '__')}_val{args.n_val}_test{args.n_test}"
