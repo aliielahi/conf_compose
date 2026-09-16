@@ -58,8 +58,10 @@ class SequenceProbability:
                  null_inputs: Sequence[str] = ContentFreeInputs.inputs, system: Optional[str] = None):
         if scope not in SCOPES:
             raise ValueError(f"scope must be one of {SCOPES}")
+        if not 0 < tail_fraction <= 1:
+            raise ValueError("tail_fraction must be in (0, 1]")
         if not hasattr(llm, "score"):
-            raise TypeError(f"{llm!r} cannot teacher-force continuations; use a local HF model")
+            raise TypeError(f"{llm!r} cannot teacher-force continuations; use a local model")
         self.llm = llm
         self.scope = scope
         self.debias = debias
@@ -68,7 +70,8 @@ class SequenceProbability:
         self.system = system
 
     def estimate(self, task, examples, responses: Sequence[str]) -> List[Optional[SequenceProbResult]]:
-        rows = [self._spans(task, example, response) for example, response in zip(examples, responses)]
+        pairs = zip(examples, responses, strict=True)
+        rows = [self._spans(task, example, response) for example, response in pairs]
         valid = [i for i, row in enumerate(rows) if row is not None]
         prompts, prefixes, continuations = ([rows[i][k] for i in valid] for k in range(3))
         main = self.llm.score(prompts, continuations, prefixes, system=self.system)

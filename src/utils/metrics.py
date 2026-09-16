@@ -36,9 +36,8 @@ def nll(conf: Sequence[float], correct: Sequence[float]) -> float:
 def ece(conf: Sequence[float], correct: Sequence[float], n_bins: int = 10, adaptive: bool = False) -> float:
     conf, correct = _arrays(conf, correct)
     if adaptive:
-        order = np.argsort(conf, kind="stable")
-        bins = np.empty(len(conf), dtype=int)
-        bins[order] = np.minimum(np.arange(len(conf)) * n_bins // len(conf), n_bins - 1)
+        edges = np.quantile(conf, np.linspace(0, 1, n_bins + 1)[1:-1])
+        bins = np.searchsorted(edges, conf, side="right")
     else:
         bins = np.minimum((conf * n_bins).astype(int), n_bins - 1)
     gaps = np.abs(np.bincount(bins, conf - correct, minlength=n_bins))

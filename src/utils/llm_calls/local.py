@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .core import BaseLLM, Conversation, Generation, PromptLike, normalize_prompt
@@ -34,9 +36,22 @@ class LocalLLM(BaseLLM):
             raise ValueError("prompts, continuations and prefixes must have equal length")
         contexts = [self.render(*normalize_prompt(p, system)) + prefix for p, prefix in zip(prompts, prefixes)]
         requests = list(zip(contexts, continuations))
-        unique = sorted(set(requests), key=lambda r: len(r[0]) + len(r[1]), reverse=True)
-        scored = dict(zip(unique, self._score_unique([c for c, _ in unique], [t for _, t in unique])))
+        scored: Dict[Tuple[str, str], List[float]] = {}
+        for request in set(requests):
+            hit = self.cache.get(self._score_key(*request)) if self.cache else None
+            if hit is not None:
+                scored[request] = hit["logprobs"]
+        todo = sorted(set(requests) - scored.keys(), key=lambda r: len(r[0]) + len(r[1]), reverse=True)
+        for request, logprobs in zip(todo, self._score_unique([c for c, _ in todo], [t for _, t in todo])):
+            scored[request] = logprobs
+            if self.cache:
+                self.cache.set(self._score_key(*request), {"logprobs": logprobs})
         return [scored[r] for r in requests]
+
+    def _score_key(self, context: str, continuation: str) -> str:
+        payload = {"kind": "score", "provider": self.provider, "model": self.model,
+                   "context": context, "continuation": continuation}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
     def continuation_ids(self, contexts: Sequence[str], continuations: Sequence[str]) -> Tuple[List[List[int]], List[int]]:
         encoded = self.encode([c + t for c, t in zip(contexts, continuations)], return_offsets_mapping=True)

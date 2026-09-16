@@ -9,7 +9,7 @@ from typing import List, Optional, Sequence
 
 from prompts import VerbalizedPrompts
 
-_SCORE = re.compile(r"(\d+(?:\.\d+)?)\s*(%|/\s*(?:10|100)\b)?")
+_SCORE = re.compile(r"^\s*(?:confidence\s*[:=]?\s*)?(\d+(?:\.\d+)?)\s*(%|/\s*100|/\s*10)?\s*\.?\s*$", re.IGNORECASE)
 
 
 @dataclass
@@ -24,16 +24,11 @@ class VerbalizedResult:
 
 
 def parse_confidence(text: str, scale: float = 10) -> Optional[float]:
-    match = _SCORE.search(text)
+    match = _SCORE.match(text)
     if match is None:
         return None
     value, unit = float(match.group(1)), (match.group(2) or "").replace(" ", "")
-    if unit in ("%", "/100"):
-        value /= 100
-    elif unit == "/10" or value <= scale:
-        value /= scale
-    else:
-        return None
+    value /= 100 if unit in ("%", "/100") else scale
     return value if 0 <= value <= 1 else None
 
 
@@ -52,7 +47,7 @@ class VerbalizedConfidence:
         conversations = [
             [{"role": "user", "content": p}, {"role": "assistant", "content": r},
              {"role": "user", "content": self.prompt}]
-            for p, r in zip(prompts, responses)
+            for p, r in zip(prompts, responses, strict=True)
         ]
         samples = self.llm.prompt(conversations, n=self.repeats, temperature=self.temperature,
                                   max_tokens=self.max_tokens, system=self.system)

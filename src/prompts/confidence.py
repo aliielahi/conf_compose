@@ -11,5 +11,13 @@ class VerbalizedPrompts:
     )
 
 
+class VerificationPrompts:
+    check = Template(
+        "Question: {question}\n\nProposed solution:\n{response}\n\n"
+        "Is the final answer of the proposed solution correct? Answer with only True or False."
+    )
+    labels = ("True", "False")
+
+
 class ContentFreeInputs:
     inputs = ("N/A", "", "[MASK]")

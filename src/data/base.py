@@ -20,6 +20,7 @@ class Answer:
     text: str
     start: int
     end: int
+    explicit: bool = True
 
 
 class Task:

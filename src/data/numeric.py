@@ -9,16 +9,17 @@ from prompts import NumericReasoning
 
 from .base import Answer, Example, Task
 
-_NUMBER = r"-?(?:\$\s*)?\d[\d,]*(?:\.\d+)?|-?\.\d+"
+_NUMBER = r"-?(?:\$\s*)?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:\s*/\s*\d+)?|-?\.\d+"
 _CUE = re.compile(rf"answer is[:\s]*\**\s*({_NUMBER})", re.IGNORECASE)
 _ANY = re.compile(_NUMBER)
 
 
 def normalize_number(text: str) -> Optional[float]:
     cleaned = re.sub(r"[\s$,]", "", text).rstrip(".")
+    numerator, _, denominator = cleaned.partition("/")
     try:
-        return float(cleaned)
-    except ValueError:
+        return float(numerator) / float(denominator) if denominator else float(numerator)
+    except (ValueError, ZeroDivisionError):
         return None
 
 
@@ -34,7 +35,7 @@ class NumericTask(Task):
         if not matches:
             return None
         m = matches[-1]
-        return Answer(m.group(0), m.start(), m.end())
+        return Answer(m.group(0), m.start(), m.end(), explicit=False)
 
     def equivalent(self, a: str, b: str) -> bool:
         x, y = normalize_number(a), normalize_number(b)

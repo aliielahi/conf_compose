@@ -12,18 +12,21 @@ def run_zero_shot(llm, task, examples, max_tokens: int = 512, scopes: Sequence[s
                   verbal_temperature: float = 0.3, consistency_temperatures: Sequence[float] = (),
                   consistency_samples: int = 5) -> List[Dict[str, Any]]:
     prompts = [task.prompt(example) for example in examples]
-    responses = llm(prompts, max_tokens=max_tokens, temperature=0.0)
-    answers = [task.extract_answer(response) for response in responses]
+    generations = llm.generate(prompts, max_tokens=max_tokens, temperature=0.0)
+    responses = [generation.text for generation in generations]
 
     records = []
-    for example, response, answer in zip(examples, responses, answers):
+    for example, generation in zip(examples, generations, strict=True):
+        answer = task.extract_answer(generation.text)
         prediction = answer.text if answer else None
         records.append({
             "id": example.id,
             "gold": example.answer,
             "prediction": prediction,
             "correct": task.is_correct(prediction, example),
-            "response": response,
+            "explicit_answer": bool(answer and answer.explicit),
+            "finish_reason": generation.finish_reason,
+            "response": generation.text,
             "confidence": {},
         })
 
