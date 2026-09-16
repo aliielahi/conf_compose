@@ -76,6 +76,9 @@ class OpenAIChat(BaseLLM):
             request["stop"] = _as_list(params.pop("stop"))
         if params.pop("logprobs", False):
             request["logprobs"] = True
+        if params.get("top_logprobs"):
+            request["logprobs"] = True
+            request["top_logprobs"] = params.pop("top_logprobs")
         if "top_k" in params:
             request.setdefault("extra_body", {})["top_k"] = params.pop("top_k")
         request.update(params)
@@ -89,6 +92,8 @@ class OpenAIChat(BaseLLM):
             finish_reason=choice.finish_reason,
             logprobs=[t.logprob for t in token_logprobs] if token_logprobs else None,
             tokens=[t.token for t in token_logprobs] if token_logprobs else None,
+            top_logprobs=([{c.token: c.logprob for c in t.top_logprobs} for t in token_logprobs]
+                          if token_logprobs and request.get("top_logprobs") else None),
             input_tokens=getattr(response.usage, "prompt_tokens", None),
             output_tokens=getattr(response.usage, "completion_tokens", None),
             raw=response,
@@ -114,7 +119,7 @@ class AnthropicChat(BaseLLM):
 
     def _unsupported_params(self) -> Sequence[str]:
         sampling = ["temperature", "top_p", "top_k"] if self.no_sampling_models.search(self.model) else []
-        return ["logprobs", "seed", *sampling]
+        return ["logprobs", "top_logprobs", "seed", *sampling]
 
     def _make_client(self):
         import anthropic
@@ -181,6 +186,9 @@ class GeminiChat(BaseLLM):
             config["stop_sequences"] = _as_list(params.pop("stop"))
         if params.pop("logprobs", False):
             config["response_logprobs"] = True
+        if params.get("top_logprobs"):
+            config["response_logprobs"] = True
+            config["logprobs"] = params.pop("top_logprobs")
         config.update(params)
         config = {k: v for k, v in config.items() if v is not None}
 
@@ -203,6 +211,9 @@ class GeminiChat(BaseLLM):
         if chosen:
             generation.logprobs = [c.log_probability for c in chosen]
             generation.tokens = [c.token for c in chosen]
+        top = candidate.logprobs_result.top_candidates if candidate.logprobs_result else None
+        if top and config.get("logprobs"):
+            generation.top_logprobs = [{c.token: c.log_probability for c in step.candidates} for step in top]
         return generation
 
     def _classify_error(self, exc: BaseException):

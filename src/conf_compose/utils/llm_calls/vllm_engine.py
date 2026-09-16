@@ -34,12 +34,13 @@ class VLLMLocal(LocalLLM):
 
         params = dict(params)
         with_logprobs = bool(params.pop("logprobs", False))
+        top_logprobs = params.pop("top_logprobs", 0) or 0
         temperature = params.pop("temperature", 0.0) or 0.0
         sampling = temperature > 0
         options: Dict[str, Any] = {"n": copies if sampling else 1, "temperature": temperature,
                                    "max_tokens": params.pop("max_tokens", 256)}
-        if with_logprobs:
-            options["logprobs"] = 1
+        if with_logprobs or top_logprobs:
+            options["logprobs"] = max(top_logprobs, 1)
         if "stop" in params:
             stop = params.pop("stop")
             options["stop"] = [stop] if isinstance(stop, str) else stop
@@ -52,8 +53,8 @@ class VLLMLocal(LocalLLM):
 
         groups = []
         for output in outputs:
-            group = [_to_generation(self.model, completion, len(output.prompt_token_ids), with_logprobs)
-                     for completion in output.outputs]
+            group = [_to_generation(self.model, completion, len(output.prompt_token_ids), with_logprobs,
+                                    bool(top_logprobs)) for completion in output.outputs]
             groups.append(group if sampling else group * copies)
         return groups
 
@@ -71,18 +72,28 @@ class VLLMLocal(LocalLLM):
         return scores
 
 
-def _to_generation(model: str, completion, input_tokens: int, with_logprobs: bool) -> Generation:
-    logprobs = tokens = None
+def _to_generation(model: str, completion, input_tokens: int, with_logprobs: bool, with_top: bool) -> Generation:
+    logprobs = tokens = top = None
     if with_logprobs and completion.logprobs:
         chosen = [step[token] for step, token in zip(completion.logprobs, completion.token_ids)]
         logprobs = [c.logprob for c in chosen]
         tokens = [c.decoded_token for c in chosen]
+    if with_top and completion.logprobs:
+        top = [_top_dict((c.decoded_token, c.logprob) for c in step.values()) for step in completion.logprobs]
     return Generation(
         text=completion.text,
         model=model,
         finish_reason=completion.finish_reason,
         logprobs=logprobs,
         tokens=tokens,
+        top_logprobs=top,
         input_tokens=input_tokens,
         output_tokens=len(completion.token_ids),
     )
+
+
+def _top_dict(pairs) -> Dict[str, float]:
+    top: Dict[str, float] = {}
+    for token, logprob in pairs:
+        top[token] = max(logprob, top.get(token, float("-inf")))
+    return top

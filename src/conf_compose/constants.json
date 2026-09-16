@@ -15,7 +15,7 @@
   },
   "sequence_probability": {"scopes": ["response"], "tail_fraction": 0.1},
   "evaluation": {"calibrator": "beta", "n_boot": 1000},
-  "vllm": {"gpu_memory_utilization": 0.9, "max_model_len": 8192},
+  "vllm": {"gpu_memory_utilization": 0.9, "max_model_len": 8192, "max_num_seqs": 512, "max_num_batched_tokens": 32768},
   "hf": {"batch_size": 32},
   "paths": {"results": "results", "logs": "logs", "cache": "cache"},
   "baselines": {

@@ -97,6 +97,7 @@ class HFLocal(LocalLLM):
     def _generate_batch(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:
         params = dict(params)
         with_logprobs = bool(params.pop("logprobs", False))
+        top_logprobs = params.pop("top_logprobs", 0) or 0
         temperature = params.pop("temperature", 0.0) or 0.0
         top_p, top_k = params.pop("top_p", None), params.pop("top_k", None)
         sampling = temperature > 0
@@ -107,7 +108,7 @@ class HFLocal(LocalLLM):
             "num_return_sequences": per_prompt,
             "pad_token_id": self.tokenizer.pad_token_id,
             "return_dict_in_generate": True,
-            "output_scores": with_logprobs,
+            "output_scores": with_logprobs or bool(top_logprobs),
         }
         if sampling:
             options.update({k: v for k, v in (("temperature", temperature), ("top_p", top_p), ("top_k", top_k))
@@ -137,6 +138,7 @@ class HFLocal(LocalLLM):
                 finish_reason="length" if stop_at is None else "stop",
                 logprobs=transition[row, :len(ids)].float().tolist() if with_logprobs else None,
                 tokens=self.tokenizer.convert_ids_to_tokens(ids) if with_logprobs else None,
+                top_logprobs=self._top_logprobs(output.scores, row, len(ids), top_logprobs) if top_logprobs else None,
                 input_tokens=input_lengths[row // per_prompt],
                 output_tokens=len(ids),
             ))
@@ -145,6 +147,16 @@ class HFLocal(LocalLLM):
         if sampling:
             return [generations[j:j + copies] for j in range(0, len(generations), copies)]
         return [[generation] * copies for generation in generations]
+
+    def _top_logprobs(self, scores, row: int, length: int, k: int) -> List[Dict[str, float]]:
+        steps = []
+        for step in scores[:length]:
+            values, indices = torch.log_softmax(step[row].float(), dim=-1).topk(k)
+            top: Dict[str, float] = {}
+            for token, logprob in zip(self.tokenizer.batch_decode(indices[:, None]), values.tolist()):
+                top[token] = max(logprob, top.get(token, float("-inf")))
+            steps.append(top)
+        return steps
 
 
 def _free_cuda() -> None:

@@ -30,6 +30,7 @@ _PARAM_ALIASES = {
     "top_p": ("top_p", "top-p", "topp"),
     "top_k": ("top_k", "top-k", "topk"),
     "logprobs": ("logprob",),
+    "top_logprobs": ("top_logprob", "logprob"),
     "seed": ("seed",),
     "stop": ("stop",),
 }
@@ -46,6 +47,7 @@ class Generation:
     finish_reason: Optional[str] = None
     logprobs: Optional[List[float]] = None
     tokens: Optional[List[str]] = None
+    top_logprobs: Optional[List[Dict[str, float]]] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     error: Optional[str] = None
@@ -61,7 +63,8 @@ class Generation:
         return sum(self.logprobs) / len(self.logprobs) if self.logprobs else None
 
     def to_dict(self) -> Dict[str, Any]:
-        keys = ("text", "model", "finish_reason", "logprobs", "tokens", "input_tokens", "output_tokens", "error")
+        keys = ("text", "model", "finish_reason", "logprobs", "tokens", "top_logprobs", "input_tokens", "output_tokens",
+                "error")
         return {k: getattr(self, k) for k in keys}
 
     def __str__(self) -> str:

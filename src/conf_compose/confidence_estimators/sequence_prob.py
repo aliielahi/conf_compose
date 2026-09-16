@@ -53,6 +53,11 @@ class SequenceProbResult:
         return _sigmoid(self.mean_logprob - self.null_mean_logprob)
 
 
+def results_from_logprobs(token_logprobs: Sequence[Optional[Sequence[float]]],
+                          tail_fraction: float = 0.1) -> List[Optional[SequenceProbResult]]:
+    return [SequenceProbResult(list(lps), tail_fraction) if lps else None for lps in token_logprobs]
+
+
 class SequenceProbability:
     def __init__(self, llm, scope: str = "response", debias: bool = True, tail_fraction: float = 0.1,
                  null_inputs: Sequence[str] = ContentFreeInputs.inputs, system: Optional[str] = None):

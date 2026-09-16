@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from conf_compose.confidence_estimators import (ConsistencyConfidence, SelfVerification, SequenceProbability,
-                                   VerbalizedConfidence)
+                                                VerbalizedConfidence, results_from_logprobs)
 from conf_compose.constants import SAMPLING, SEQUENCE_PROBABILITY
 
 
@@ -37,19 +37,22 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
     timings = {} if timings is None else timings
     prompts = [task.prompt(example) for example in examples]
     with _timed(timings, "generation"):
-        generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0)
+        generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0, logprobs=True)
     responses = [generation.text for generation in generations]
     records = [_record(task, example, generation) for example, generation in zip(examples, generations, strict=True)]
 
     tail = f"tail{round(config.tail_fraction * 100)}"
     for scope in config.scopes:
-        estimator = SequenceProbability(llm, scope=scope, debias=config.debias, tail_fraction=config.tail_fraction)
         signals = {f"seq_{scope}": "confidence", f"seq_{scope}_min": "min_confidence",
                    f"seq_{scope}_{tail}": "tail_confidence"}
         if config.debias:
             signals[f"seq_{scope}_debiased"] = "debiased_confidence"
         with _timed(timings, f"seq_{scope}"):
-            results = estimator.estimate(task, examples, responses)
+            if scope == "response" and not config.debias and all(g.logprobs for g in generations if g.text):
+                results = results_from_logprobs([g.logprobs for g in generations], config.tail_fraction)
+            else:
+                estimator = SequenceProbability(llm, scope, config.debias, config.tail_fraction)
+                results = estimator.estimate(task, examples, responses)
         for record, result in zip(records, results):
             record["confidence"].update({name: getattr(result, attr) if result else None
                                          for name, attr in signals.items()})

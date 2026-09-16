@@ -13,7 +13,7 @@ METRICS = ("auroc", "cal_brier", "cal_ece", "raw_ece", "auarc")
 def load_runs(out_dir: Path):
     for path in sorted(out_dir.glob("*/*/report.json")):
         payload = json.loads(path.read_text())
-        yield payload["args"]["task"], payload["args"]["model"], payload
+        yield payload["task"], payload["model"], payload
 
 
 def markdown_table(header, rows):

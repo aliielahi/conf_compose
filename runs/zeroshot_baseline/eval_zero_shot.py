@@ -1,4 +1,4 @@
-"""Evaluate zero-shot correctness and confidence quality for one model on one task; defaults from constants.json."""
+"""Evaluate zero-shot correctness and confidence quality for one model on one or more tasks (model loaded once)."""
 
 import argparse
 import json
@@ -16,10 +16,10 @@ from conf_compose.utils.llm_calls import LLM
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
-    parser.add_argument("--task", required=True, choices=sorted(TASKS))
-    parser.add_argument("--n-val", type=int, help="default from constants; 0 skips calibration")
-    parser.add_argument("--n-test", type=int)
-    parser.add_argument("--max-tokens", type=int)
+    parser.add_argument("--tasks", nargs="+", required=True, choices=sorted(TASKS))
+    parser.add_argument("--n-val", type=int, help="default per task from constants; 0 skips calibration")
+    parser.add_argument("--n-test", type=int, help="default per task from constants")
+    parser.add_argument("--max-tokens", type=int, help="default per task from constants")
     parser.add_argument("--scopes", nargs="+", default=SEQUENCE_PROBABILITY["scopes"])
     parser.add_argument("--tail-fraction", type=float, default=SEQUENCE_PROBABILITY["tail_fraction"])
     parser.add_argument("--debias", action="store_true")
@@ -38,36 +38,48 @@ def parse_args():
     parser.add_argument("--max-model-len", type=int, default=VLLM["max_model_len"])
     parser.add_argument("--include-unanswered", action="store_true",
                         help="score examples with no extracted answer too (counted as confidence 0)")
+    parser.add_argument("--skip-existing", action="store_true", help="skip tasks whose report.json exists")
     parser.add_argument("--verbose", action="store_true", help="show vLLM engine logs")
     parser.add_argument("--out-dir", default=str(RESULTS_DIR))
     parser.add_argument("--cache-dir", default=str(CACHE_DIR))
-    args = parser.parse_args()
-    task_defaults = TASKS[args.task]
-    args.n_val = task_defaults["n_val"] if args.n_val is None else args.n_val
-    args.n_test = task_defaults["n_test"] if args.n_test is None else args.n_test
-    args.max_tokens = args.max_tokens or task_defaults["max_tokens"]
-    return args
+    return parser.parse_args()
 
 
-def main():
-    args = parse_args()
+def task_settings(args, task_name):
+    defaults = TASKS[task_name]
+    return {
+        "n_val": defaults["n_val"] if args.n_val is None else args.n_val,
+        "n_test": defaults["n_test"] if args.n_test is None else args.n_test,
+        "max_tokens": args.max_tokens or defaults["max_tokens"],
+    }
+
+
+def load_model(args):
+    if args.model.startswith("hf/"):
+        return LLM(args.model, cache_dir=args.cache_dir, batch_size=args.batch_size)
+    engine = {"max_num_seqs": VLLM["max_num_seqs"], "max_num_batched_tokens": VLLM["max_num_batched_tokens"]}
+    return LLM(args.model, cache_dir=args.cache_dir, gpu_memory_utilization=args.gpu_memory_utilization,
+               max_model_len=args.max_model_len, quiet=not args.verbose, engine_kwargs=engine)
+
+
+def evaluate_task(llm, args, task_name):
+    settings = task_settings(args, task_name)
+    out_dir = run_dir(args.out_dir, task_name, args.model, settings["n_val"], settings["n_test"])
+    if args.skip_existing and (out_dir / "report.json").exists():
+        print(f"skip {task_name}: {out_dir} exists")
+        return
+
+    start = time.time()
     config = ZeroShotConfig(
-        max_tokens=args.max_tokens, scopes=tuple(args.scopes), tail_fraction=args.tail_fraction, debias=args.debias,
-        verbalized=not args.no_verbalized, verbal_temperature=args.verbal_temperature,
+        max_tokens=settings["max_tokens"], scopes=tuple(args.scopes), tail_fraction=args.tail_fraction,
+        debias=args.debias, verbalized=not args.no_verbalized, verbal_temperature=args.verbal_temperature,
         verification=not args.no_verification, consistency_temperatures=tuple(args.consistency_temperatures),
         consistency_samples=args.consistency_samples, top_p=args.top_p, top_k=args.top_k,
     )
-
-    start = time.time()
-    task = get_task(args.task)
-    validation = task.load("validation", n=args.n_val) if args.n_val else []
-    test = task.load("test", n=args.n_test)
-    backend_kwargs = ({"batch_size": args.batch_size} if args.model.startswith("hf/") else
-                      {"gpu_memory_utilization": args.gpu_memory_utilization, "max_model_len": args.max_model_len,
-                       "quiet": not args.verbose})
-    llm = LLM(args.model, cache_dir=args.cache_dir, **backend_kwargs)
-    print(f"{llm} | {task.name} val={len(validation)} test={len(test)} max_tokens={args.max_tokens} "
-          f"| loaded in {time.time() - start:.0f}s")
+    task = get_task(task_name)
+    validation = task.load("validation", n=settings["n_val"]) if settings["n_val"] else []
+    test = task.load("test", n=settings["n_test"])
+    print(f"\n{llm} | {task_name} val={len(validation)} test={len(test)} max_tokens={settings['max_tokens']}")
 
     timings = {}
     combined = run_zero_shot(llm, task, validation + test, config, timings)
@@ -86,14 +98,22 @@ def main():
     print(f"\ntest confidence quality on {scope} ({calibration}) | {time.time() - start:.0f}s\n")
     print("\n".join(format_report(report)))
 
-    out_dir = run_dir(args.out_dir, task.name, args.model, args.n_val, args.n_test)
     out_dir.mkdir(parents=True, exist_ok=True)
     for split, rows in records.items():
         (out_dir / f"{split}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    payload = {"args": vars(args), "config": config.to_dict(), "splits": summaries, "timings": timings,
-               "report": report}
+    payload = {"model": args.model, "task": task_name, "settings": settings, "config": config.to_dict(),
+               "args": vars(args), "splits": summaries, "timings": timings, "report": report}
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
     print(f"\nsaved {out_dir}")
+
+
+def main():
+    args = parse_args()
+    start = time.time()
+    llm = load_model(args)
+    print(f"loaded {llm} in {time.time() - start:.0f}s")
+    for task_name in args.tasks:
+        evaluate_task(llm, args, task_name)
 
 
 if __name__ == "__main__":
