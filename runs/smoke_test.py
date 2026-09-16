@@ -1,13 +1,13 @@
-"""Smoke test for llm_calls: load one model and exercise the shared generate/prompt interface."""
+"""Smoke test: load one model and exercise the shared generate/prompt interface."""
 
 import argparse
 import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "utils"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from llm_calls import LLM
+from utils.llm_calls import LLM
 
 
 def section(title):

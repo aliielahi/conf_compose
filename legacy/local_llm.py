@@ -16,7 +16,7 @@ from huggingface_hub import login
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from .hf_models import HF_models  # noqa: F401  (re-exported)
+from src.utils.llm_calls.hf_models import HF_models
 
 _LOCK = Lock()
 
