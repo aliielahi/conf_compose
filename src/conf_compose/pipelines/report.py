@@ -22,7 +22,8 @@ def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[
     test_correct = np.array([record["correct"] for record in test], dtype=float)
     val_correct = np.array([record["correct"] for record in validation], dtype=float)
     report: Dict[str, Dict[str, Any]] = {}
-    if len(validation):
+    can_calibrate = len(set(val_correct.tolist())) == 2
+    if can_calibrate:
         report["constant"] = _reliability(np.full(len(test), val_correct.mean()), test_correct, "cal")
         report["constant"].update(auroc=float("nan"), auarc=float(test_correct.mean()), missing=0)
 
@@ -36,7 +37,7 @@ def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[
             "missing": sum(record["confidence"][name] is None for record in test),
         }
         row.update(_reliability(conf, test_correct, "raw"))
-        if len(validation):
+        if can_calibrate:
             calibrated = CALIBRATORS[calibrator]().fit(signal(validation, name), val_correct).predict(conf)
             row.update(_reliability(calibrated, test_correct, "cal"))
         report[name] = row
@@ -49,11 +50,16 @@ def format_report(report: Dict[str, Dict[str, Any]]) -> List[str]:
     lines = [header]
     for name, row in report.items():
         low, high = row.get("auroc_ci", (nan, nan))
-        lines.append(f"{name:<30}{row['auroc']:>8.3f}{f'[{low:.3f}, {high:.3f}]':>16}{row['auarc']:>8.3f}"
-                     f"{row.get('raw_ece', nan):>9.3f}{row.get('raw_brier', nan):>10.3f}"
-                     f"{row.get('cal_ece', nan):>9.3f}{row.get('cal_brier', nan):>10.3f}"
-                     f"{row.get('cal_nll', nan):>9.3f}{row['missing']:>8}")
+        ci = "—" if low != low else f"[{low:.3f}, {high:.3f}]"
+        values = [_cell(row.get(key), width) for key, width in
+                  (("auroc", 8), ("auarc", 8), ("raw_ece", 9), ("raw_brier", 10), ("cal_ece", 9), ("cal_brier", 10),
+                   ("cal_nll", 9))]
+        lines.append(f"{name:<30}{values[0]}{ci:>16}{''.join(values[1:])}{row['missing']:>8}")
     return lines
+
+
+def _cell(value, width: int) -> str:
+    return f"{'—':>{width}}" if value is None or value != value else f"{value:>{width}.3f}"
 
 
 def _reliability(conf: np.ndarray, correct: np.ndarray, prefix: str) -> Dict[str, float]:

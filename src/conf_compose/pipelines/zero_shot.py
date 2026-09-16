@@ -32,11 +32,12 @@ class ZeroShotConfig:
 
 
 def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
-                  timings: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
+                  timings: Optional[Dict[str, Dict[str, float]]] = None) -> List[Dict[str, Any]]:
     config = config or ZeroShotConfig()
     timings = {} if timings is None else timings
+    cache = getattr(llm, "cache", None)
     prompts = [task.prompt(example) for example in examples]
-    with _timed(timings, "generation"):
+    with _timed(timings, "generation", cache):
         generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0, logprobs=True)
     responses = [generation.text for generation in generations]
     records = [_record(task, example, generation) for example, generation in zip(examples, generations, strict=True)]
@@ -47,7 +48,7 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
                    f"seq_{scope}_{tail}": "tail_confidence"}
         if config.debias:
             signals[f"seq_{scope}_debiased"] = "debiased_confidence"
-        with _timed(timings, f"seq_{scope}"):
+        with _timed(timings, f"seq_{scope}", cache):
             if scope == "response" and not config.debias and all(g.logprobs for g in generations if g.text):
                 results = results_from_logprobs([g.logprobs for g in generations], config.tail_fraction)
             else:
@@ -59,7 +60,7 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
             record.setdefault("token_logprobs", {})[scope] = result.token_logprobs if result else None
 
     if config.verification:
-        with _timed(timings, "verification"):
+        with _timed(timings, "verification", cache):
             values = SelfVerification(llm).estimate(task, examples, responses)
         for record, value in zip(records, values):
             record["confidence"]["verification"] = value
@@ -67,7 +68,7 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
     if config.verbalized:
         estimator = VerbalizedConfidence(llm, repeats=config.verbal_repeats, temperature=config.verbal_temperature,
                                          top_p=config.top_p, top_k=config.top_k)
-        with _timed(timings, "verbalized"):
+        with _timed(timings, "verbalized", cache):
             results = estimator.estimate(prompts, responses)
         for record, result in zip(records, results):
             record["confidence"]["verbalized"] = result.confidence
@@ -78,7 +79,7 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
         estimator = ConsistencyConfidence(llm, config.consistency_samples, temperature, config.top_p, config.top_k,
                                           config.max_tokens)
         name = f"consistency_t{temperature:g}"
-        with _timed(timings, name):
+        with _timed(timings, name, cache):
             results = estimator.estimate(task, examples, predictions)
         for record, result in zip(records, results):
             record["confidence"].update({name: result.agreement, f"{name}_margin": result.margin,
@@ -88,10 +89,13 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
 
 
 @contextmanager
-def _timed(timings: Dict[str, float], stage: str):
+def _timed(timings: Dict[str, Dict[str, float]], stage: str, cache=None):
     start = time.time()
+    hits, misses = (cache.hits, cache.misses) if cache else (0, 0)
     yield
-    timings[stage] = time.time() - start
+    timings[stage] = {"seconds": time.time() - start,
+                      "cache_hits": (cache.hits - hits) if cache else 0,
+                      "cache_misses": (cache.misses - misses) if cache else 0}
 
 
 def signal_names(records: Sequence[Dict[str, Any]]) -> List[str]:

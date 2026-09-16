@@ -9,7 +9,7 @@ from conf_compose.constants import (CACHE_DIR, EVALUATION, HF, RESULTS_DIR, SAMP
 from conf_compose.data import get_task
 from conf_compose.pipelines import ZeroShotConfig, run_zero_shot
 from conf_compose.pipelines.report import confidence_report, format_report
-from conf_compose.pipelines.runs import run_dir, split_summary
+from conf_compose.pipelines.runs import header_lines, run_dir, split_summary, timing_line
 from conf_compose.utils.llm_calls import LLM
 
 
@@ -89,13 +89,9 @@ def evaluate_task(llm, args, task_name):
                                answered_only=not args.include_unanswered)
     summaries = {split: split_summary(rows) for split, rows in records.items()}
 
-    for split, summary in summaries.items():
-        print(f"{split}: " + " ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}"
-                                      for k, v in summary.items()))
-    print("stage seconds: " + " ".join(f"{stage}={seconds:.0f}" for stage, seconds in timings.items()))
-    calibration = f"{args.calibrator} calibration fitted on validation" if validation else "no calibration"
-    scope = "all examples" if args.include_unanswered else "examples with an extracted answer"
-    print(f"\ntest confidence quality on {scope} ({calibration}) | {time.time() - start:.0f}s\n")
+    print(timing_line(timings))
+    print("\n".join(header_lines(summaries, records, answered_only=not args.include_unanswered)))
+    print(f"\ntest confidence quality ({args.calibrator} calibration on validation) | {time.time() - start:.0f}s\n")
     print("\n".join(format_report(report)))
 
     out_dir.mkdir(parents=True, exist_ok=True)

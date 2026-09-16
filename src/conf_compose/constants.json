@@ -1,7 +1,7 @@
 {
   "seed": 42,
   "tasks": {
-    "gsm8k": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 1000, "n_val": 300, "n_test": 1319},
+    "gsm8k": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
     "svamp": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 200, "n_val": 100, "n_test": 300},
     "math500": {"word_limit": 600, "max_tokens": 4096, "val_pool_size": 100, "n_val": 100, "n_test": 400}
   },
@@ -15,7 +15,7 @@
   },
   "sequence_probability": {"scopes": ["response"], "tail_fraction": 0.1},
   "evaluation": {"calibrator": "beta", "n_boot": 1000},
-  "vllm": {"gpu_memory_utilization": 0.9, "max_model_len": 8192, "max_num_seqs": 512, "max_num_batched_tokens": 32768},
+  "vllm": {"gpu_memory_utilization": 0.7, "max_model_len": 8192, "max_num_seqs": 512, "max_num_batched_tokens": 32768},
   "hf": {"batch_size": 32},
   "paths": {"results": "results", "logs": "logs", "cache": "cache"},
   "baselines": {

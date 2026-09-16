@@ -100,10 +100,14 @@ class DiskCache:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT)")
         self._db.commit()
+        self.hits = 0
+        self.misses = 0
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             row = self._db.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+            self.hits += row is not None
+            self.misses += row is None
         return json.loads(row[0]) if row else None
 
     def set(self, key: str, value: Dict[str, Any]) -> None:
