@@ -36,11 +36,9 @@ class NumericTask(Task):
         m = matches[-1]
         return Answer(m.group(0), m.start(), m.end())
 
-    def is_correct(self, predicted: Optional[str], example: Example) -> bool:
-        if predicted is None:
-            return False
-        value, gold = normalize_number(predicted), normalize_number(example.answer)
-        return value is not None and gold is not None and abs(value - gold) < 1e-6
+    def equivalent(self, a: str, b: str) -> bool:
+        x, y = normalize_number(a), normalize_number(b)
+        return x is not None and y is not None and abs(x - y) < 1e-6
 
 
 class GSM8K(NumericTask):

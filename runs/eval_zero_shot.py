@@ -24,8 +24,12 @@ def main():
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--scopes", nargs="+", default=["answer", "answer_no_reasoning", "response"])
+    parser.add_argument("--scopes", nargs="+", default=["response"])
+    parser.add_argument("--tail-fraction", type=float, default=0.1)
     parser.add_argument("--no-verbalized", action="store_true")
+    parser.add_argument("--verbal-temperature", type=float, default=0.3)
+    parser.add_argument("--consistency-temperatures", type=float, nargs="*", default=[0.3, 0.7])
+    parser.add_argument("--consistency-samples", type=int, default=5)
     parser.add_argument("--out-dir", default="runs/outputs")
     parser.add_argument("--cache-dir", default="runs/cache")
     args = parser.parse_args()
@@ -37,7 +41,9 @@ def main():
     print(f"{llm} | {task.name}/{args.split} n={len(examples)} | loaded in {time.time() - start:.0f}s")
 
     records = run_zero_shot(llm, task, examples, max_tokens=args.max_tokens, scopes=args.scopes,
-                            verbalized=not args.no_verbalized)
+                            tail_fraction=args.tail_fraction, verbalized=not args.no_verbalized, verbal_temperature=args.verbal_temperature,
+                            consistency_temperatures=args.consistency_temperatures,
+                            consistency_samples=args.consistency_samples)
     correct = [record["correct"] for record in records]
     extracted = sum(record["prediction"] is not None for record in records)
 

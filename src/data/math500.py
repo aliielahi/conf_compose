@@ -48,11 +48,9 @@ class MATH500(Task):
     def extract_answer(self, response: str) -> Optional[Answer]:
         return last_boxed(response)
 
-    def is_correct(self, predicted: Optional[str], example: Example) -> bool:
-        if predicted is None:
-            return False
+    def equivalent(self, a: str, b: str) -> bool:
         try:
             from math_verify import parse, verify
-            return bool(verify(parse(f"${example.answer}$"), parse(f"${predicted}$")))
         except ImportError:
-            return normalize_latex(predicted) == normalize_latex(example.answer)
+            return normalize_latex(a) == normalize_latex(b)
+        return bool(verify(parse(f"${a}$"), parse(f"${b}$")))

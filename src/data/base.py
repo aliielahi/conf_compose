@@ -65,5 +65,8 @@ class Task:
     def extract_answer(self, response: str) -> Optional[Answer]:
         raise NotImplementedError
 
-    def is_correct(self, predicted: Optional[str], example: Example) -> bool:
+    def equivalent(self, a: str, b: str) -> bool:
         raise NotImplementedError
+
+    def is_correct(self, predicted: Optional[str], example: Example) -> bool:
+        return predicted is not None and self.equivalent(predicted, example.answer)

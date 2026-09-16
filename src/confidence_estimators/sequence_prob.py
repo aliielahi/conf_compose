@@ -1,9 +1,9 @@
-"""Sequence-probability confidence: exp(mean token log-prob), optionally debiased against content-free inputs."""
+"""Sequence-probability confidence from token log-probs: mean, minimum and lowest-tail aggregations."""
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 from prompts import ContentFreeInputs
@@ -13,24 +13,48 @@ SCOPES = ("answer", "answer_no_reasoning", "response")
 
 @dataclass
 class SequenceProbResult:
-    confidence: float
-    mean_logprob: float
-    n_tokens: int
+    token_logprobs: List[float] = field(repr=False)
+    tail_fraction: float
     null_mean_logprob: Optional[float] = None
-    debiased_confidence: Optional[float] = None
 
+    @property
+    def n_tokens(self) -> int:
+        return len(self.token_logprobs)
 
-def _sigmoid(x: float) -> float:
-    return 1 / (1 + math.exp(-x)) if x >= 0 else math.exp(x) / (1 + math.exp(x))
+    @property
+    def mean_logprob(self) -> float:
+        return sum(self.token_logprobs) / self.n_tokens
 
+    @property
+    def min_logprob(self) -> float:
+        return min(self.token_logprobs)
 
-def _logmeanexp(values: Sequence[float]) -> float:
-    top = max(values)
-    return top + math.log(sum(math.exp(v - top) for v in values) / len(values))
+    @property
+    def tail_logprob(self) -> float:
+        k = max(1, math.ceil(self.tail_fraction * self.n_tokens))
+        return sum(sorted(self.token_logprobs)[:k]) / k
+
+    @property
+    def confidence(self) -> float:
+        return math.exp(self.mean_logprob)
+
+    @property
+    def min_confidence(self) -> float:
+        return math.exp(self.min_logprob)
+
+    @property
+    def tail_confidence(self) -> float:
+        return math.exp(self.tail_logprob)
+
+    @property
+    def debiased_confidence(self) -> Optional[float]:
+        if self.null_mean_logprob is None:
+            return None
+        return _sigmoid(self.mean_logprob - self.null_mean_logprob)
 
 
 class SequenceProbability:
-    def __init__(self, llm, scope: str = "answer", debias: bool = True,
+    def __init__(self, llm, scope: str = "response", debias: bool = True, tail_fraction: float = 0.1,
                  null_inputs: Sequence[str] = ContentFreeInputs.inputs, system: Optional[str] = None):
         if scope not in SCOPES:
             raise ValueError(f"scope must be one of {SCOPES}")
@@ -39,37 +63,29 @@ class SequenceProbability:
         self.llm = llm
         self.scope = scope
         self.debias = debias
+        self.tail_fraction = tail_fraction
         self.null_inputs = list(null_inputs)
         self.system = system
 
     def estimate(self, task, examples, responses: Sequence[str]) -> List[Optional[SequenceProbResult]]:
-        rows = [self._spans(task, ex, resp) for ex, resp in zip(examples, responses)]
+        rows = [self._spans(task, example, response) for example, response in zip(examples, responses)]
         valid = [i for i, row in enumerate(rows) if row is not None]
-        prompts = [rows[i][0] for i in valid]
-        prefixes = [rows[i][1] for i in valid]
-        continuations = [rows[i][2] for i in valid]
+        prompts, prefixes, continuations = ([rows[i][k] for i in valid] for k in range(3))
         main = self.llm.score(prompts, continuations, prefixes, system=self.system)
 
         null_means: List[Optional[float]] = [None] * len(valid)
         if self.debias:
             null_prefix = "" if self.scope == "response" else task.answer_prefix
-            per_null = [
-                self.llm.score([task.null_prompt(null)] * len(valid), continuations,
-                               [null_prefix] * len(valid), system=self.system)
-                for null in self.null_inputs
-            ]
-            null_means = [_logmeanexp([_mean(scores[j]) for scores in per_null]) for j in range(len(valid))]
+            per_null = [self.llm.score([task.null_prompt(null)] * len(valid), continuations,
+                                       [null_prefix] * len(valid), system=self.system)
+                        for null in self.null_inputs]
+            null_means = [_logmeanexp([_mean(scores[j]) for scores in per_null if scores[j]])
+                          for j in range(len(valid))]
 
         results: List[Optional[SequenceProbResult]] = [None] * len(rows)
         for j, i in enumerate(valid):
-            if not main[j]:
-                continue
-            mean = _mean(main[j])
-            result = SequenceProbResult(confidence=math.exp(mean), mean_logprob=mean, n_tokens=len(main[j]))
-            if null_means[j] is not None:
-                result.null_mean_logprob = null_means[j]
-                result.debiased_confidence = _sigmoid(mean - null_means[j])
-            results[i] = result
+            if main[j]:
+                results[i] = SequenceProbResult(main[j], self.tail_fraction, null_means[j])
         return results
 
     def _spans(self, task, example, response: str):
@@ -86,3 +102,14 @@ class SequenceProbability:
 
 def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values)
+
+
+def _sigmoid(x: float) -> float:
+    return 1 / (1 + math.exp(-x)) if x >= 0 else math.exp(x) / (1 + math.exp(x))
+
+
+def _logmeanexp(values: Sequence[float]) -> Optional[float]:
+    if not values:
+        return None
+    top = max(values)
+    return top + math.log(sum(math.exp(v - top) for v in values) / len(values))
