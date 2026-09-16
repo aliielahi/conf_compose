@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 from .core import Generation
@@ -12,15 +13,20 @@ class VLLMLocal(LocalLLM):
     provider = "vllm"
 
     def __init__(self, model: str, *, gpu_memory_utilization: float = 0.9, max_model_len: Optional[int] = 8192,
-                 tensor_parallel_size: int = 1, dtype: str = "auto", seed: int = 0,
+                 tensor_parallel_size: int = 1, dtype: str = "auto", seed: int = 0, quiet: bool = True,
                  engine_kwargs: Optional[Dict[str, Any]] = None, **kwargs: Any):
+        if quiet:
+            os.environ.setdefault("VLLM_LOGGING_LEVEL", "ERROR")
         from vllm import LLM as Engine
+        from vllm.engine.arg_utils import EngineArgs
 
         super().__init__(model, **kwargs)
-        self.engine = Engine(model=self.model, dtype=dtype, seed=seed, max_model_len=max_model_len,
-                             gpu_memory_utilization=gpu_memory_utilization,
-                             tensor_parallel_size=tensor_parallel_size, enable_prefix_caching=True,
-                             **(engine_kwargs or {}))
+        options = {"model": self.model, "dtype": dtype, "seed": seed, "max_model_len": max_model_len,
+                   "gpu_memory_utilization": gpu_memory_utilization, "tensor_parallel_size": tensor_parallel_size,
+                   "enable_prefix_caching": True}
+        if quiet and "use_tqdm_on_load" in getattr(EngineArgs, "__dataclass_fields__", {}):
+            options["use_tqdm_on_load"] = False
+        self.engine = Engine(**options, **(engine_kwargs or {}))
         self.tokenizer = self.engine.get_tokenizer()
 
     def _generate_texts(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:

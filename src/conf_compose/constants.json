@@ -1,15 +1,15 @@
 {
   "seed": 42,
   "tasks": {
-    "gsm8k": {"max_tokens": 1024, "val_pool_size": 1000, "n_val": 300, "n_test": 1319},
-    "svamp": {"max_tokens": 1024, "val_pool_size": 200, "n_val": 100, "n_test": 300},
-    "math500": {"max_tokens": 2048, "val_pool_size": 100, "n_val": 100, "n_test": 400}
+    "gsm8k": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 1000, "n_val": 300, "n_test": 1319},
+    "svamp": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 200, "n_val": 100, "n_test": 300},
+    "math500": {"word_limit": 600, "max_tokens": 4096, "val_pool_size": 100, "n_val": 100, "n_test": 400}
   },
   "sampling": {
     "top_p": 1.0,
     "top_k": 0,
     "consistency_temperature": 0.7,
-    "consistency_samples": 10,
+    "consistency_samples": 5,
     "verbal_temperature": 1.0,
     "verbal_repeats": 3
   },

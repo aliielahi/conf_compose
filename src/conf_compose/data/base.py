@@ -57,10 +57,10 @@ class Task:
         return self.prompts.answer_prefix
 
     def prompt(self, example: Example) -> str:
-        return self.prompts.solve(question=example.question)
+        return self.prompts.solve(question=example.question, word_limit=TASKS[self.name]["word_limit"])
 
     def null_prompt(self, null_input: str) -> str:
-        return self.prompts.solve(question=null_input)
+        return self.prompts.solve(question=null_input, word_limit=TASKS[self.name]["word_limit"])
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:
         raise NotImplementedError

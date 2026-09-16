@@ -14,7 +14,11 @@ from .zero_shot import signal, signal_names
 
 
 def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[str, Any]],
-                      calibrator: str = "beta", n_boot: int = 1000) -> Dict[str, Dict[str, Any]]:
+                      calibrator: str = "beta", n_boot: int = 1000,
+                      answered_only: bool = True) -> Dict[str, Dict[str, Any]]:
+    if answered_only:
+        validation = [record for record in validation if record["prediction"] is not None]
+        test = [record for record in test if record["prediction"] is not None]
     test_correct = np.array([record["correct"] for record in test], dtype=float)
     val_correct = np.array([record["correct"] for record in validation], dtype=float)
     report: Dict[str, Dict[str, Any]] = {}

@@ -36,6 +36,9 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=HF["batch_size"], help="hf backend only")
     parser.add_argument("--gpu-memory-utilization", type=float, default=VLLM["gpu_memory_utilization"])
     parser.add_argument("--max-model-len", type=int, default=VLLM["max_model_len"])
+    parser.add_argument("--include-unanswered", action="store_true",
+                        help="score examples with no extracted answer too (counted as confidence 0)")
+    parser.add_argument("--verbose", action="store_true", help="show vLLM engine logs")
     parser.add_argument("--out-dir", default=str(RESULTS_DIR))
     parser.add_argument("--cache-dir", default=str(CACHE_DIR))
     args = parser.parse_args()
@@ -60,29 +63,35 @@ def main():
     validation = task.load("validation", n=args.n_val) if args.n_val else []
     test = task.load("test", n=args.n_test)
     backend_kwargs = ({"batch_size": args.batch_size} if args.model.startswith("hf/") else
-                      {"gpu_memory_utilization": args.gpu_memory_utilization, "max_model_len": args.max_model_len})
+                      {"gpu_memory_utilization": args.gpu_memory_utilization, "max_model_len": args.max_model_len,
+                       "quiet": not args.verbose})
     llm = LLM(args.model, cache_dir=args.cache_dir, **backend_kwargs)
     print(f"{llm} | {task.name} val={len(validation)} test={len(test)} max_tokens={args.max_tokens} "
           f"| loaded in {time.time() - start:.0f}s")
 
-    combined = run_zero_shot(llm, task, validation + test, config)
+    timings = {}
+    combined = run_zero_shot(llm, task, validation + test, config, timings)
     records = {"validation": combined[:len(validation)], "test": combined[len(validation):]}
     records = {split: rows for split, rows in records.items() if rows}
-    report = confidence_report(records.get("validation", []), records["test"], args.calibrator, args.n_boot)
+    report = confidence_report(records.get("validation", []), records["test"], args.calibrator, args.n_boot,
+                               answered_only=not args.include_unanswered)
     summaries = {split: split_summary(rows) for split, rows in records.items()}
 
     for split, summary in summaries.items():
         print(f"{split}: " + " ".join(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}"
                                       for k, v in summary.items()))
+    print("stage seconds: " + " ".join(f"{stage}={seconds:.0f}" for stage, seconds in timings.items()))
     calibration = f"{args.calibrator} calibration fitted on validation" if validation else "no calibration"
-    print(f"\ntest confidence quality ({calibration}) | {time.time() - start:.0f}s\n")
+    scope = "all examples" if args.include_unanswered else "examples with an extracted answer"
+    print(f"\ntest confidence quality on {scope} ({calibration}) | {time.time() - start:.0f}s\n")
     print("\n".join(format_report(report)))
 
     out_dir = run_dir(args.out_dir, task.name, args.model, args.n_val, args.n_test)
     out_dir.mkdir(parents=True, exist_ok=True)
     for split, rows in records.items():
         (out_dir / f"{split}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    payload = {"args": vars(args), "config": config.to_dict(), "splits": summaries, "report": report}
+    payload = {"args": vars(args), "config": config.to_dict(), "splits": summaries, "timings": timings,
+               "report": report}
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
     print(f"\nsaved {out_dir}")
 

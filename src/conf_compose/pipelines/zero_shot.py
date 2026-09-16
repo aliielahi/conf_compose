@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -29,10 +31,13 @@ class ZeroShotConfig:
         return asdict(self)
 
 
-def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None) -> List[Dict[str, Any]]:
+def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None,
+                  timings: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
     config = config or ZeroShotConfig()
+    timings = {} if timings is None else timings
     prompts = [task.prompt(example) for example in examples]
-    generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0)
+    with _timed(timings, "generation"):
+        generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0)
     responses = [generation.text for generation in generations]
     records = [_record(task, example, generation) for example, generation in zip(examples, generations, strict=True)]
 
@@ -43,19 +48,25 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None) 
                    f"seq_{scope}_{tail}": "tail_confidence"}
         if config.debias:
             signals[f"seq_{scope}_debiased"] = "debiased_confidence"
-        for record, result in zip(records, estimator.estimate(task, examples, responses)):
+        with _timed(timings, f"seq_{scope}"):
+            results = estimator.estimate(task, examples, responses)
+        for record, result in zip(records, results):
             record["confidence"].update({name: getattr(result, attr) if result else None
                                          for name, attr in signals.items()})
             record.setdefault("token_logprobs", {})[scope] = result.token_logprobs if result else None
 
     if config.verification:
-        for record, value in zip(records, SelfVerification(llm).estimate(task, examples, responses)):
+        with _timed(timings, "verification"):
+            values = SelfVerification(llm).estimate(task, examples, responses)
+        for record, value in zip(records, values):
             record["confidence"]["verification"] = value
 
     if config.verbalized:
         estimator = VerbalizedConfidence(llm, repeats=config.verbal_repeats, temperature=config.verbal_temperature,
                                          top_p=config.top_p, top_k=config.top_k)
-        for record, result in zip(records, estimator.estimate(prompts, responses)):
+        with _timed(timings, "verbalized"):
+            results = estimator.estimate(prompts, responses)
+        for record, result in zip(records, results):
             record["confidence"]["verbalized"] = result.confidence
             record["verbalized_raw"] = result.raw
 
@@ -64,11 +75,20 @@ def run_zero_shot(llm, task, examples, config: Optional[ZeroShotConfig] = None) 
         estimator = ConsistencyConfidence(llm, config.consistency_samples, temperature, config.top_p, config.top_k,
                                           config.max_tokens)
         name = f"consistency_t{temperature:g}"
-        for record, result in zip(records, estimator.estimate(task, examples, predictions)):
+        with _timed(timings, name):
+            results = estimator.estimate(task, examples, predictions)
+        for record, result in zip(records, results):
             record["confidence"].update({name: result.agreement, f"{name}_margin": result.margin,
                                          f"{name}_entropy": result.entropy_confidence})
             record.setdefault("sampled_answers", {})[name] = result.answers
     return records
+
+
+@contextmanager
+def _timed(timings: Dict[str, float], stage: str):
+    start = time.time()
+    yield
+    timings[stage] = time.time() - start
 
 
 def signal_names(records: Sequence[Dict[str, Any]]) -> List[str]:
