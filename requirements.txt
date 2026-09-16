@@ -1,0 +1,13 @@
+# Python >= 3.10 (anthropic SDK 1.x requires it)
+# API backends (src/utils/llm_calls)
+openai>=1.40
+anthropic>=0.40
+google-genai>=1.0
+httpx
+tqdm
+python-dotenv
+
+# Local HuggingFace backend
+torch
+transformers>=4.56
+accelerate
