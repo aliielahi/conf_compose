@@ -1,12 +1,1 @@
-# Python >= 3.10
-openai>=1.40
-anthropic>=0.40
-google-genai>=1.0
-tqdm
-python-dotenv
-datasets
-math-verify
-torch
-transformers>=4.56
-accelerate
-vllm
+-e .[api,local]

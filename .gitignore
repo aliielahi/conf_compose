@@ -10,3 +10,7 @@ papers/
 .env
 *.sqlite
 res.txt
+
+logs/
+cache/
+*.egg-info/

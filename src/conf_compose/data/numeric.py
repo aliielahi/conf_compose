@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-from prompts import NumericReasoning
+from conf_compose.prompts import NumericReasoning
 
 from .base import Answer, Example, Task
 
@@ -56,7 +56,6 @@ class GSM8K(NumericTask):
 class SVAMP(NumericTask):
     name = "svamp"
     hf_path = "ChilleD/SVAMP"
-    val_size = 200
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:
         value = float(row["Answer"])

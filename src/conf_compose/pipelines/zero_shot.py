@@ -5,24 +5,25 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from confidence_estimators import (ConsistencyConfidence, SelfVerification, SequenceProbability,
+from conf_compose.confidence_estimators import (ConsistencyConfidence, SelfVerification, SequenceProbability,
                                    VerbalizedConfidence)
+from conf_compose.constants import SAMPLING, SEQUENCE_PROBABILITY
 
 
 @dataclass
 class ZeroShotConfig:
-    max_tokens: int = 512
-    scopes: Tuple[str, ...] = ("response",)
-    tail_fraction: float = 0.1
+    max_tokens: int = 1024
+    scopes: Tuple[str, ...] = tuple(SEQUENCE_PROBABILITY["scopes"])
+    tail_fraction: float = SEQUENCE_PROBABILITY["tail_fraction"]
     debias: bool = False
     verbalized: bool = True
-    verbal_temperature: float = 1.0
-    verbal_repeats: int = 3
+    verbal_temperature: float = SAMPLING["verbal_temperature"]
+    verbal_repeats: int = SAMPLING["verbal_repeats"]
     verification: bool = True
-    consistency_temperatures: Tuple[float, ...] = (0.7,)
-    consistency_samples: int = 10
-    top_p: float = 1.0
-    top_k: int = 0
+    consistency_temperatures: Tuple[float, ...] = (SAMPLING["consistency_temperature"],)
+    consistency_samples: int = SAMPLING["consistency_samples"]
+    top_p: float = SAMPLING["top_p"]
+    top_k: int = SAMPLING["top_k"]
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import List, Optional, Sequence
 
-from prompts import VerificationPrompts
+from conf_compose.prompts import VerificationPrompts
 
 
 class SelfVerification:

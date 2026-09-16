@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conf-compose"
+version = "0.1.0"
+description = "Confidence composition for multi-agent language model systems"
+requires-python = ">=3.10"
+dependencies = ["numpy", "tqdm", "datasets", "math-verify", "python-dotenv"]
+
+[project.optional-dependencies]
+api = ["openai>=1.40", "anthropic>=0.40", "google-genai>=1.0", "httpx"]
+local = ["torch", "transformers>=4.56", "accelerate", "vllm"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+conf_compose = ["constants.json"]

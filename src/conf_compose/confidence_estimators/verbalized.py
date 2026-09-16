@@ -7,7 +7,7 @@ import statistics
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
-from prompts import VerbalizedPrompts
+from conf_compose.prompts import VerbalizedPrompts
 
 _SCORE = re.compile(r"^\s*(?:confidence\s*[:=]?\s*)?(\d+(?:\.\d+)?)\s*(%|/\s*100|/\s*10)?\s*\.?\s*$", re.IGNORECASE)
 

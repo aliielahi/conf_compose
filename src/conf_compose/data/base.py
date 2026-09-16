@@ -6,6 +6,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from conf_compose.constants import SEED, TASKS
+
 
 @dataclass
 class Example:
@@ -28,10 +30,9 @@ class Task:
     hf_path: str = ""
     hf_config: Optional[str] = None
     validation_source: str = "train"
-    val_size: int = 1000
     prompts: Any = None
 
-    def load(self, split: str = "test", n: Optional[int] = None, seed: int = 42) -> List[Example]:
+    def load(self, split: str = "test", n: Optional[int] = None, seed: int = SEED) -> List[Example]:
         if split not in ("train", "validation", "test"):
             raise ValueError(f"unknown split {split!r}")
         source = self.validation_source if split == "validation" else split
@@ -47,7 +48,8 @@ class Task:
         rows = list(enumerate(load_dataset(self.hf_path, self.hf_config, split=source)))
         if split == "train" or (split == "test" and self.validation_source == "train"):
             return rows
-        held_out = set(random.Random(seed).sample(range(len(rows)), min(self.val_size, len(rows))))
+        pool_size = min(TASKS[self.name]["val_pool_size"], len(rows))
+        held_out = set(random.Random(seed).sample(range(len(rows)), pool_size))
         return [row for row in rows if (row[0] in held_out) == (split == "validation")]
 
     @property

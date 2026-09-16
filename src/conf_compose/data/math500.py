@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-from prompts import BoxedReasoning
+from conf_compose.prompts import BoxedReasoning
 
 from .base import Answer, Example, Task
 
@@ -38,7 +38,6 @@ class MATH500(Task):
     name = "math500"
     hf_path = "HuggingFaceH4/MATH-500"
     validation_source = "test"
-    val_size = 100
     prompts = BoxedReasoning
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:

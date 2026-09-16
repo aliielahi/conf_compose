@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
-from prompts import ContentFreeInputs
+from conf_compose.prompts import ContentFreeInputs
 
 SCOPES = ("answer", "answer_no_reasoning", "response")
 

@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Sequence
 import numpy as np
 from numpy import nan
 
-from utils.calibration import CALIBRATORS
-from utils.metrics import auarc, auroc, bootstrap_ci, brier, ece, nll
+from conf_compose.utils.calibration import CALIBRATORS
+from conf_compose.utils.metrics import auarc, auroc, bootstrap_ci, brier, ece, nll
 
 from .zero_shot import signal, signal_names
 
