@@ -29,13 +29,14 @@ class Task:
     name: str = ""
     hf_path: str = ""
     hf_config: Optional[str] = None
-    validation_source: str = "train"
+    hf_splits: Dict[str, str] = {"train": "train", "validation": "train", "test": "test"}
+    hf_kwargs: Dict[str, Any] = {}
     prompts: Any = None
 
     def load(self, split: str = "test", n: Optional[int] = None, seed: int = SEED) -> List[Example]:
-        if split not in ("train", "validation", "test"):
+        if split not in self.hf_splits:
             raise ValueError(f"unknown split {split!r}")
-        source = self.validation_source if split == "validation" else split
+        source = self.hf_splits[split]
         examples = [self.to_example(row, f"{self.name}-{source}-{i}") for i, row in self._rows(split, seed)]
         if n is not None and n < len(examples):
             examples = random.Random(seed).sample(examples, n)
@@ -44,9 +45,9 @@ class Task:
     def _rows(self, split: str, seed: int):
         from datasets import load_dataset
 
-        source = self.validation_source if split == "validation" else split
-        rows = list(enumerate(load_dataset(self.hf_path, self.hf_config, split=source)))
-        if split == "train" or (split == "test" and self.validation_source == "train"):
+        rows = list(enumerate(load_dataset(self.hf_path, self.hf_config, split=self.hf_splits[split],
+                                           **self.hf_kwargs)))
+        if self.hf_splits["validation"] != self.hf_splits["test"] or split == "train":
             return rows
         pool_size = min(TASKS[self.name]["val_pool_size"], len(rows))
         held_out = set(random.Random(seed).sample(range(len(rows)), pool_size))

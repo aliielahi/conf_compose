@@ -41,7 +41,7 @@ def main():
         task_runs = [(model, payload) for t, model, payload in runs if t == task]
         sections.append(f"## {task}")
         overview = [[model, str(p["splits"]["test"]["n"]), fmt(p["splits"]["test"]["accuracy"]),
-                     fmt(p["splits"]["test"]["truncated"]), fmt(p["splits"]["test"]["no_answer"])]
+                     str(p["splits"]["test"]["truncated"]), str(p["splits"]["test"]["no_answer"])]
                     for model, p in task_runs]
         sections.append(markdown_table(["model", "n_test", "accuracy", "truncated", "no_answer"], overview))
 

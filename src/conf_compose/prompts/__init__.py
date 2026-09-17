@@ -2,7 +2,7 @@
 
 from .base import Template
 from .confidence import ContentFreeInputs, VerbalizedPrompts, VerificationPrompts
-from .reasoning import BoxedReasoning, NumericReasoning
+from .reasoning import BooleanReasoning, BoxedReasoning, MultipleChoiceReasoning, NumericReasoning
 
-__all__ = ["Template", "NumericReasoning", "BoxedReasoning", "VerbalizedPrompts", "VerificationPrompts",
-           "ContentFreeInputs"]
+__all__ = ["Template", "NumericReasoning", "BoxedReasoning", "MultipleChoiceReasoning", "BooleanReasoning",
+           "VerbalizedPrompts", "VerificationPrompts", "ContentFreeInputs"]

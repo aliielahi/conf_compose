@@ -37,7 +37,7 @@ def normalize_latex(text: str) -> str:
 class MATH500(Task):
     name = "math500"
     hf_path = "HuggingFaceH4/MATH-500"
-    validation_source = "test"
+    hf_splits = {"validation": "test", "test": "test"}
     prompts = BoxedReasoning
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:

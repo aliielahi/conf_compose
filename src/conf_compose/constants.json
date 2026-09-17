@@ -3,7 +3,10 @@
   "tasks": {
     "gsm8k": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
     "svamp": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 200, "n_val": 100, "n_test": 300},
-    "math500": {"word_limit": 600, "max_tokens": 4096, "val_pool_size": 100, "n_val": 100, "n_test": 400}
+    "math500": {"word_limit": 600, "max_tokens": 4096, "val_pool_size": 100, "n_val": 100, "n_test": 400},
+    "csqa": {"word_limit": 100, "max_tokens": 512, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
+    "boolq": {"word_limit": 100, "max_tokens": 512, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
+    "prontoqa": {"word_limit": 150, "max_tokens": 640, "val_pool_size": 100, "n_val": 100, "n_test": 400}
   },
   "sampling": {
     "top_p": 1.0,

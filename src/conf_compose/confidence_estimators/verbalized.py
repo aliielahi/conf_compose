@@ -9,7 +9,8 @@ from typing import List, Optional, Sequence
 
 from conf_compose.prompts import VerbalizedPrompts
 
-_SCORE = re.compile(r"^\s*(?:confidence\s*[:=]?\s*)?(\d+(?:\.\d+)?)\s*(%|/\s*100|/\s*10)?\s*\.?\s*$", re.IGNORECASE)
+_SCORE = re.compile(r"^\s*(?:confidence\s*[:=]?\s*)?(\d+(?:\.\d+)?)\s*(%|/\s*100|/\s*10)?\s*\.?\s*(?:\n|$)",
+                    re.IGNORECASE)
 
 
 @dataclass
