@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument("--consistency-samples", type=int)
     parser.add_argument("--no-consistency", action="store_true", help="skip the resampling estimator")
     parser.add_argument("--batch-size", type=int, default=50, help="examples scored before appending to disk")
+    parser.add_argument("--force", action="store_true", help="rescore every example, replacing the output file")
     parser.add_argument("--gpu-memory-utilization", type=float, default=VLLM["gpu_memory_utilization"])
     parser.add_argument("--max-model-len", type=int, default=VLLM["max_model_len"])
     parser.add_argument("--verbose", action="store_true")
@@ -41,6 +42,8 @@ def main():
     trace_path = Path(args.trace)
     out_path = trace_path.with_suffix(".conf.jsonl")
     traces = read_traces(trace_path)
+    if args.force and out_path.exists():
+        out_path.write_text("")
     done = completed_ids(out_path)
     pending = [trace for trace in traces if trace.example_id not in done]
     models = agent_models(traces, args.models)
