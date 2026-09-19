@@ -8,6 +8,8 @@ from typing import List, Optional, Sequence
 
 from conf_compose.prompts import ContentFreeInputs
 
+from .context import Target
+
 SCOPES = ("answer", "answer_no_reasoning", "response")
 
 
@@ -74,9 +76,8 @@ class SequenceProbability:
         self.null_inputs = list(null_inputs)
         self.system = system
 
-    def estimate(self, task, examples, responses: Sequence[str]) -> List[Optional[SequenceProbResult]]:
-        pairs = zip(examples, responses, strict=True)
-        rows = [self._spans(task, example, response) for example, response in pairs]
+    def estimate(self, task, targets: Sequence[Target]) -> List[Optional[SequenceProbResult]]:
+        rows = [self._spans(task, target) for target in targets]
         valid = [i for i, row in enumerate(rows) if row is not None]
         prompts, prefixes, continuations = ([rows[i][k] for i in valid] for k in range(3))
         main = self.llm.score(prompts, continuations, prefixes, system=self.system)
@@ -86,7 +87,7 @@ class SequenceProbability:
             null_prefix = "" if self.scope == "response" else task.answer_prefix
             per_null = [self.llm.score([task.null_prompt(null)] * len(valid), continuations,
                                        [null_prefix] * len(valid), system=self.system)
-                        for null in self.null_inputs]
+                        for null in self.null_inputs]  # content-free baseline stays single-turn by design
             null_means = [_logmeanexp([_mean(scores[j]) for scores in per_null if scores[j]])
                           for j in range(len(valid))]
 
@@ -96,16 +97,16 @@ class SequenceProbability:
                 results[i] = SequenceProbResult(main[j], self.tail_fraction, null_means[j])
         return results
 
-    def _spans(self, task, example, response: str):
-        prompt = task.prompt(example)
+    def _spans(self, task, target: Target):
+        context, response = target.conversation, target.response
         if self.scope == "response":
-            return (prompt, "", response) if response else None
+            return (context, "", response) if response else None
         answer = task.extract_answer(response)
         if answer is None:
             return None
         if self.scope == "answer":
-            return prompt, response[:answer.start], answer.text
-        return prompt, task.answer_prefix, answer.text
+            return context, response[:answer.start], answer.text
+        return context, task.answer_prefix, answer.text
 
 
 def _mean(values: Sequence[float]) -> float:

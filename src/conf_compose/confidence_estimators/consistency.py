@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
+from .context import Target
+
 
 @dataclass
 class ConsistencyResult:
@@ -46,13 +48,13 @@ class ConsistencyConfidence:
         self.sampling = {"temperature": temperature, "top_p": top_p, "top_k": top_k, "max_tokens": max_tokens}
         self.system = system
 
-    def estimate(self, task, examples, predictions: Sequence[Optional[str]]) -> List[ConsistencyResult]:
-        if len(examples) != len(predictions):
-            raise ValueError("examples and predictions must have equal length")
-        prompts = [task.prompt(example) for example in examples]
-        sampled = self.llm.prompt(prompts, n=self.samples, system=self.system, **self.sampling)
+    def estimate(self, task, targets: Sequence[Target]) -> List[ConsistencyResult]:
+        """Resample each agent's own incoming context and measure agreement with its target answer."""
+        contexts = [target.prior_context for target in targets]
+        sampled = self.llm.prompt(contexts, n=self.samples, system=self.system, **self.sampling)
         results = []
-        for prediction, responses in zip(predictions, sampled):
+        for target, responses in zip(targets, sampled):
+            prediction = target.answer
             responses = responses if isinstance(responses, list) else [responses]
             answers = [answer.text if (answer := task.extract_answer(r)) else None for r in responses]
             valid = [a for a in answers if a is not None]
