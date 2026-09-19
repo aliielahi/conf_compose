@@ -50,13 +50,14 @@ def main():
 
     task = get_task(args.task)
     defaults = TASKS[args.task]
-    config = ConfidenceConfig(max_tokens=defaults["max_tokens"], verbalized=True, verification=True,
-                              consistency_temperatures=() if args.no_consistency else ConfidenceConfig().
-                              consistency_temperatures,
-                              consistency_samples=args.consistency_samples or ConfidenceConfig().consistency_samples)
+    config = ConfidenceConfig(max_tokens=defaults["max_tokens"])
+    if args.no_consistency:
+        config.consistency_temperatures = ()
+    if args.consistency_samples:
+        config.consistency_samples = args.consistency_samples
 
     memory = args.gpu_memory_utilization / len(models)
-    llms = [LLM(model, cache_dir=args.cache_dir, execution=args.execution, on_error="return",
+    llms = [LLM(model, cache_dir=args.cache_dir, execution=args.execution,
                 gpu_memory_utilization=memory, max_model_len=args.max_model_len, quiet=not args.verbose)
             for model in models]
 

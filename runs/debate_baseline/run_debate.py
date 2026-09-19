@@ -34,7 +34,7 @@ def load_models(args):
     memory = args.gpu_memory_utilization / len(args.models)
     llms = []
     for model in args.models:
-        llms.append(LLM(model, cache_dir=args.cache_dir, execution=args.execution, on_error="return",
+        llms.append(LLM(model, cache_dir=args.cache_dir, execution=args.execution,
                         gpu_memory_utilization=memory, max_model_len=args.max_model_len, quiet=not args.verbose,
                         engine_kwargs={"max_num_seqs": VLLM["max_num_seqs"],
                                        "max_num_batched_tokens": VLLM["max_num_batched_tokens"]}))

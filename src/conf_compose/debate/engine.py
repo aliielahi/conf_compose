@@ -41,6 +41,7 @@ def run_debate(llms: Sequence, task, examples, config: Optional[DebateConfig] = 
 
 def _run_round(llm, task, examples, traces: List[ExampleTrace], agent: int, round_index: int,
                config: DebateConfig) -> None:
+    spec = config.models[agent] if agent < len(config.models) else llm.model
     conversations = [_conversation(task, example, trace, agent, round_index, config)
                      for example, trace in zip(examples, traces)]
     start = time.time()
@@ -52,7 +53,7 @@ def _run_round(llm, task, examples, traces: List[ExampleTrace], agent: int, roun
         trace.turns.append(Turn(
             example_id=trace.example_id,
             agent=agent,
-            model=llm.model,
+            model=spec,
             round=round_index,
             parents=parents,
             messages=messages,
@@ -65,7 +66,7 @@ def _run_round(llm, task, examples, traces: List[ExampleTrace], agent: int, roun
             output_tokens=generation.output_tokens,
             seconds=seconds,
             execution=config.execution,
-            settings=config.generation_settings(),
+            settings={**config.generation_settings(), "resolved_model": llm.model},
             error=generation.error,
         ))
 

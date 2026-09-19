@@ -20,7 +20,8 @@ def add_confidence(llms: Sequence, task, traces: Sequence[ExampleTrace],
         turns = [turn for trace in traces for turn in trace.turns if turn.agent == agent]
         targets = [_target(trace, turn) for trace in traces for turn in trace.turns if turn.agent == agent]
         agent_timings: Dict[str, Dict[str, float]] = {}
-        for turn, output in zip(turns, estimate_confidence(llm, task, targets, config, agent_timings)):
+        outputs = estimate_confidence(llm, task, targets, config, agent_timings)
+        for turn, output in zip(turns, outputs):
             turn.confidence = output.signals
         if timings is not None:
             timings[f"agent{agent}"] = agent_timings

@@ -65,6 +65,7 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
     if config.verification:
         with _timed(timings, "verification", cache):
             values = SelfVerification(llm).estimate(task, targets)
+        _check_stage("verification", values, targets)
         for output, value in zip(outputs, values):
             output.signals["verification"] = value
 
@@ -73,6 +74,7 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
                                          top_p=config.top_p, top_k=config.top_k)
         with _timed(timings, "verbalized", cache):
             results = estimator.estimate(task, targets)
+        _check_stage("verbalized", [result.confidence for result in results], targets)
         for output, result in zip(outputs, results):
             output.signals["verbalized"] = result.confidence
             output.details["verbalized_raw"] = result.raw
@@ -83,11 +85,19 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
         name = f"consistency_t{temperature:g}"
         with _timed(timings, name, cache):
             results = estimator.estimate(task, targets)
+        _check_stage(name, [result.valid_fraction or None for result in results], targets)
         for output, result in zip(outputs, results):
             output.signals.update({name: result.agreement, f"{name}_margin": result.margin,
                                    f"{name}_entropy": result.entropy_confidence})
             output.details.setdefault("sampled_answers", {})[name] = result.answers
     return outputs
+
+
+def _check_stage(stage: str, values: Sequence[Optional[float]], targets: Sequence[Target]) -> None:
+    """An estimator that returns nothing for every answerable target means the backend failed."""
+    answerable = [i for i, target in enumerate(targets) if target.answer is not None]
+    if answerable and all(values[i] is None for i in answerable):
+        raise RuntimeError(f"{stage}: no value for any of {len(answerable)} answerable targets; check the backend")
 
 
 @contextmanager
