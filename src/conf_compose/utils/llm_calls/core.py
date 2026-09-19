@@ -131,7 +131,7 @@ class BaseLLM:
     def __init__(self, model: str, *, system: Optional[str] = None, temperature: Optional[float] = None,
                  max_tokens: Optional[int] = None, concurrency: int = 16, rpm: Optional[float] = None,
                  max_retries: int = 6, timeout: float = 120.0, cache_dir: Optional[Union[str, Path]] = None,
-                 on_error: str = "raise", progress: bool = True, **default_kwargs: Any):
+                 execution: str = "", on_error: str = "raise", progress: bool = True, **default_kwargs: Any):
         if on_error not in ("raise", "return"):
             raise ValueError('on_error must be "raise" or "return"')
         self.model = model
@@ -140,6 +140,7 @@ class BaseLLM:
         self.rpm = rpm
         self.max_retries = max_retries
         self.timeout = timeout
+        self.execution = execution
         self.on_error = on_error
         self.progress = progress
         self.cache = DiskCache(cache_dir) if cache_dir else None
@@ -293,8 +294,9 @@ class BaseLLM:
             await asyncio.sleep(wait)
 
     def cache_key(self, system: Optional[str], messages: Conversation, params: Dict[str, Any], sample: int) -> str:
-        payload = {"provider": self.provider, "model": self.model, "system": system,
-                   "messages": messages, "params": params, "sample": sample}
+        sampled = (params.get("temperature") or 0) > 0
+        payload = {"provider": self.provider, "model": self.model, "system": system, "messages": messages,
+                   "params": params, "sample": sample, "execution": self.execution if sampled else ""}
         return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
     def _progress_bar(self, total: int):

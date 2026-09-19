@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sweep 01: zero-shot baselines for every model x task in src/constants.json, detached with nohup.
-# Usage: bash runs/sweeps/sweep01-zeroshot.sh [--parallel N] [-- extra eval_zero_shot.py flags]
+# Zero-shot confidence baselines: the whole model x task grid from src/conf_compose/constants.json, under nohup.
+# Usage: bash runs/sweeps/sweep01-zs_baseline.sh [--parallel N] [--dry-run] [-- extra eval_zero_shot.py flags]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

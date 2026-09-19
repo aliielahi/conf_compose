@@ -12,6 +12,7 @@ EVALUATION = CONSTANTS["evaluation"]
 VLLM = CONSTANTS["vllm"]
 HF = CONSTANTS["hf"]
 BASELINES = CONSTANTS["baselines"]
+DEBATE = CONSTANTS["debate"]
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS_DIR = ROOT / CONSTANTS["paths"]["results"]

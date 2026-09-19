@@ -30,7 +30,7 @@ def fmt(value, ci=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sweep", required=True)
+    parser.add_argument("--sweep", default=BASELINES["sweep"])
     parser.add_argument("--signals", nargs="+", default=BASELINES["summary_signals"])
     args = parser.parse_args()
     out_dir = RESULTS_DIR / args.sweep
