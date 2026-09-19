@@ -1,0 +1,269 @@
+{
+  "model": "vllm/phi4mii",
+  "task": "prontoqa",
+  "settings": {
+    "n_val": 100,
+    "n_test": 400,
+    "max_tokens": 640
+  },
+  "config": {
+    "max_tokens": 640,
+    "scopes": [
+      "response"
+    ],
+    "tail_fraction": 0.1,
+    "debias": false,
+    "verbalized": true,
+    "verbal_temperature": 1.0,
+    "verbal_repeats": 3,
+    "verification": true,
+    "consistency_temperatures": [
+      0.7
+    ],
+    "consistency_samples": 5,
+    "top_p": 1.0,
+    "top_k": 0
+  },
+  "args": {
+    "model": "vllm/phi4mii",
+    "tasks": [
+      "prontoqa"
+    ],
+    "n_val": null,
+    "n_test": null,
+    "max_tokens": null,
+    "scopes": [
+      "response"
+    ],
+    "tail_fraction": 0.1,
+    "debias": false,
+    "no_verbalized": false,
+    "no_verification": false,
+    "verbal_temperature": 1.0,
+    "consistency_temperatures": [
+      0.7
+    ],
+    "consistency_samples": 5,
+    "top_p": 1.0,
+    "top_k": 0,
+    "calibrator": "beta",
+    "n_boot": 1000,
+    "batch_size": 32,
+    "gpu_memory_utilization": 0.7,
+    "max_model_len": 8192,
+    "include_unanswered": false,
+    "skip_existing": true,
+    "verbose": false,
+    "out_dir": "/workspace/results/sweep02",
+    "cache_dir": "/workspace/cache"
+  },
+  "splits": {
+    "validation": {
+      "n": 100,
+      "correct": 70,
+      "incorrect": 30,
+      "no_answer": 2,
+      "truncated": 2,
+      "implicit_answers": 0,
+      "accuracy": 0.7
+    },
+    "test": {
+      "n": 400,
+      "correct": 270,
+      "incorrect": 130,
+      "no_answer": 4,
+      "truncated": 5,
+      "implicit_answers": 1,
+      "accuracy": 0.675
+    }
+  },
+  "timings": {
+    "generation": {
+      "seconds": 64.81739568710327,
+      "cache_hits": 0,
+      "cache_misses": 500
+    },
+    "seq_response": {
+      "seconds": 0.0018973350524902344,
+      "cache_hits": 0,
+      "cache_misses": 0
+    },
+    "verification": {
+      "seconds": 13.65026569366455,
+      "cache_hits": 0,
+      "cache_misses": 500
+    },
+    "verbalized": {
+      "seconds": 14.926560401916504,
+      "cache_hits": 0,
+      "cache_misses": 1500
+    },
+    "consistency_t0.7": {
+      "seconds": 173.40641045570374,
+      "cache_hits": 0,
+      "cache_misses": 2500
+    }
+  },
+  "report": {
+    "constant": {
+      "cal_ece": 0.0324675324675323,
+      "cal_brier": 0.21799628942486088,
+      "cal_nll": 0.6280192876720805,
+      "auroc": NaN,
+      "auarc": 0.6818181818181818,
+      "missing": 0
+    },
+    "seq_response": {
+      "auroc": 0.6112874779541446,
+      "auroc_ci": [
+        0.5514642180126996,
+        0.6668865616418391
+      ],
+      "auarc": 0.7586676751480207,
+      "auarc_ci": [
+        0.7036546056552736,
+        0.8091182985944269
+      ],
+      "missing": 0,
+      "raw_ece": 0.18428592912314928,
+      "raw_brier": 0.24615241169561178,
+      "raw_nll": 0.7296516198252421,
+      "cal_ece": 0.05704262135689876,
+      "cal_brier": 0.21644034811247634,
+      "cal_nll": 0.6227502954952137
+    },
+    "seq_response_min": {
+      "auroc": 0.5534097589653145,
+      "auroc_ci": [
+        0.4962646223445836,
+        0.6119353535957879
+      ],
+      "auarc": 0.721948485334183,
+      "auarc_ci": [
+        0.6648626454157365,
+        0.7815966887242055
+      ],
+      "missing": 0,
+      "raw_ece": 0.41075823463012734,
+      "raw_brier": 0.3859209913397166,
+      "raw_nll": 1.014033497796758,
+      "cal_ece": 0.049912671431651776,
+      "cal_brier": 0.21943342352977463,
+      "cal_nll": 0.6316131571042995
+    },
+    "seq_response_tail10": {
+      "auroc": 0.5985008818342151,
+      "auroc_ci": [
+        0.5403128645968369,
+        0.6523459905553387
+      ],
+      "auarc": 0.7543012827665126,
+      "auarc_ci": [
+        0.7000281255860634,
+        0.8037609573793242
+      ],
+      "missing": 0,
+      "raw_ece": 0.23520823237105093,
+      "raw_brier": 0.26811085747883756,
+      "raw_nll": 0.7324017848197125,
+      "cal_ece": 0.03810287039262845,
+      "cal_brier": 0.2138560732395052,
+      "cal_nll": 0.617338749575946
+    },
+    "verification": {
+      "auroc": 0.535949441504997,
+      "auroc_ci": [
+        0.47453697103752746,
+        0.5991036433052502
+      ],
+      "auarc": 0.6918498417832195,
+      "auarc_ci": [
+        0.6258233110916893,
+        0.7558058935742639
+      ],
+      "missing": 0,
+      "raw_ece": 0.24712320530604623,
+      "raw_brier": 0.30250103561571723,
+      "raw_nll": 1.030256025099577,
+      "cal_ece": 0.03476307594770997,
+      "cal_brier": 0.2177773626081535,
+      "cal_nll": 0.627908806391563
+    },
+    "verbalized": {
+      "auroc": 0.5416666666666666,
+      "auroc_ci": [
+        0.48410689573487453,
+        0.6033188711107378
+      ],
+      "auarc": 0.7093843588468944,
+      "auarc_ci": [
+        0.6494532024354995,
+        0.7701076051011578
+      ],
+      "missing": 1,
+      "raw_ece": 0.20353535353535332,
+      "raw_brier": 0.26191217732884403,
+      "raw_nll": 1.2134501126607313,
+      "cal_ece": 0.03835397277650764,
+      "cal_brier": 0.2184131759880717,
+      "cal_nll": 0.6290472635647582
+    },
+    "consistency_t0.7": {
+      "auroc": 0.7264550264550265,
+      "auroc_ci": [
+        0.6763218674174845,
+        0.7775183953076454
+      ],
+      "auarc": 0.811294251095983,
+      "auarc_ci": [
+        0.7663175060371991,
+        0.8542617543185612
+      ],
+      "missing": 0,
+      "raw_ece": 0.10959595959595961,
+      "raw_brier": 0.1996969696969697,
+      "raw_nll": 1.2298125661448545,
+      "cal_ece": 0.04599399108365379,
+      "cal_brier": 0.189852049066979,
+      "cal_nll": 0.5604142731813422
+    },
+    "consistency_t0.7_margin": {
+      "auroc": 0.6697530864197531,
+      "auroc_ci": [
+        0.6167110934664247,
+        0.7209626546153405
+      ],
+      "auarc": 0.7849318815678965,
+      "auarc_ci": [
+        0.7330864809468819,
+        0.82964952666306
+      ],
+      "missing": 0,
+      "raw_ece": 0.15707070707070717,
+      "raw_brier": 0.2350505050505051,
+      "raw_nll": 1.4553033339094572,
+      "cal_ece": 0.03658574392143831,
+      "cal_brier": 0.20418323048888787,
+      "cal_nll": 0.5954244501006931
+    },
+    "consistency_t0.7_entropy": {
+      "auroc": 0.6650646678424457,
+      "auroc_ci": [
+        0.6125429340966624,
+        0.716838921319695
+      ],
+      "auarc": 0.7834046850204649,
+      "auarc_ci": [
+        0.7316119339291379,
+        0.8286244299186657
+      ],
+      "missing": 0,
+      "raw_ece": 0.11839632355622935,
+      "raw_brier": 0.21424099819661993,
+      "raw_nll": 1.3747233472332865,
+      "cal_ece": 0.0621165854580268,
+      "cal_brier": 0.2028439426978177,
+      "cal_nll": 0.5908934243274829
+    }
+  }
+}
