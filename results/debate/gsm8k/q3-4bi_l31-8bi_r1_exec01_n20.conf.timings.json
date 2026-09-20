@@ -1,0 +1,46 @@
+{
+  "agent0": {
+    "seq_response": {
+      "seconds": 0.00022220611572265625,
+      "cache_hits": 0,
+      "cache_misses": 0
+    },
+    "verification": {
+      "seconds": 1.080094814300537,
+      "cache_hits": 0,
+      "cache_misses": 40
+    },
+    "verbalized": {
+      "seconds": 2.1525509357452393,
+      "cache_hits": 0,
+      "cache_misses": 120
+    },
+    "consistency_t0.7": {
+      "seconds": 20.01447582244873,
+      "cache_hits": 0,
+      "cache_misses": 200
+    }
+  },
+  "agent1": {
+    "seq_response": {
+      "seconds": 0.00011229515075683594,
+      "cache_hits": 0,
+      "cache_misses": 0
+    },
+    "verification": {
+      "seconds": 2.095785617828369,
+      "cache_hits": 0,
+      "cache_misses": 40
+    },
+    "verbalized": {
+      "seconds": 4.062769412994385,
+      "cache_hits": 0,
+      "cache_misses": 120
+    },
+    "consistency_t0.7": {
+      "seconds": 83.55236649513245,
+      "cache_hits": 0,
+      "cache_misses": 200
+    }
+  }
+}
