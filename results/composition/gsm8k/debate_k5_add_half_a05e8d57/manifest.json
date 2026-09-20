@@ -1,0 +1,20 @@
+{
+  "args": {
+    "task": "gsm8k",
+    "validation": [
+      "results/debate/gsm8k/q3-4bi_l31-8bi_r1_validation_exec01_n150.conf.jsonl"
+    ],
+    "test": [
+      "results/debate/gsm8k/q3-4bi_l31-8bi_r1_test_exec01_n300.conf.jsonl"
+    ],
+    "source": "debate",
+    "budget": 5,
+    "variant": "add_half",
+    "n_boot": 1000,
+    "out_dir": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/composition"
+  },
+  "inputs": {
+    "results/debate/gsm8k/q3-4bi_l31-8bi_r1_validation_exec01_n150.conf.jsonl": "90ab12a0a7c92550",
+    "results/debate/gsm8k/q3-4bi_l31-8bi_r1_test_exec01_n300.conf.jsonl": "09123981c25831e4"
+  }
+}

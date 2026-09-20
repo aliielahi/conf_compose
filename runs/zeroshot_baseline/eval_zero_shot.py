@@ -29,6 +29,10 @@ def parse_args():
     parser.add_argument("--consistency-temperatures", type=float, nargs="*",
                         default=[SAMPLING["consistency_temperature"]])
     parser.add_argument("--consistency-samples", type=int, default=SAMPLING["consistency_samples"])
+    parser.add_argument("--answer-temperature", type=float, default=0.0,
+                        help="0 keeps greedy answers; >0 makes each voter generate its own answer")
+    parser.add_argument("--voters", type=int, default=1, help="independent voters per model, written as _rep<i>")
+    parser.add_argument("--execution", default="", help="sampling identity; each voter appends its own index")
     parser.add_argument("--top-p", type=float, default=SAMPLING["top_p"])
     parser.add_argument("--top-k", type=int, default=SAMPLING["top_k"])
     parser.add_argument("--calibrator", choices=["beta", "platt"], default=EVALUATION["calibrator"])
@@ -62,24 +66,28 @@ def load_model(args):
                max_model_len=args.max_model_len, quiet=not args.verbose, engine_kwargs=engine)
 
 
-def evaluate_task(llm, args, task_name):
+def evaluate_task(llm, args, task_name, voter=None):
     settings = task_settings(args, task_name)
-    out_dir = run_dir(args.out_dir, task_name, args.model, settings["n_val"], settings["n_test"])
+    suffix = "" if voter is None else f"_rep{voter}"
+    out_dir = run_dir(args.out_dir, task_name, args.model, settings["n_val"], settings["n_test"], suffix)
     if args.skip_existing and (out_dir / "report.json").exists():
-        print(f"skip {task_name}: {out_dir} exists")
+        print(f"skip {task_name}{suffix}: {out_dir} exists")
         return
+    llm.execution = args.execution if voter is None else f"{args.execution}:voter{voter}"
 
     start = time.time()
     config = ZeroShotConfig(
         max_tokens=settings["max_tokens"], scopes=tuple(args.scopes), tail_fraction=args.tail_fraction,
-        debias=args.debias, verbalized=not args.no_verbalized, verbal_temperature=args.verbal_temperature,
+        answer_temperature=args.answer_temperature, debias=args.debias,
+        verbalized=not args.no_verbalized, verbal_temperature=args.verbal_temperature,
         verification=not args.no_verification, consistency_temperatures=tuple(args.consistency_temperatures),
         consistency_samples=args.consistency_samples, top_p=args.top_p, top_k=args.top_k,
     )
     task = get_task(task_name)
     validation = task.load("validation", n=settings["n_val"]) if settings["n_val"] else []
     test = task.load("test", n=settings["n_test"])
-    print(f"\n{llm} | {task_name} val={len(validation)} test={len(test)} max_tokens={settings['max_tokens']}")
+    print(f"\n{llm} | {task_name}{suffix} val={len(validation)} test={len(test)} "
+          f"max_tokens={settings['max_tokens']} answer_t={args.answer_temperature} execution={llm.execution!r}")
 
     timings = {}
     combined = run_zero_shot(llm, task, validation + test, config, timings)
@@ -97,8 +105,9 @@ def evaluate_task(llm, args, task_name):
     out_dir.mkdir(parents=True, exist_ok=True)
     for split, rows in records.items():
         (out_dir / f"{split}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    payload = {"model": args.model, "task": task_name, "settings": settings, "config": config.to_dict(),
-               "args": vars(args), "splits": summaries, "timings": timings, "report": report}
+    payload = {"model": args.model, "task": task_name, "voter": voter, "execution": llm.execution,
+               "settings": settings, "config": config.to_dict(), "args": vars(args), "splits": summaries,
+               "timings": timings, "report": report}
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
     print(f"\nsaved {out_dir}")
 
@@ -109,7 +118,11 @@ def main():
     llm = load_model(args)
     print(f"loaded {llm} in {time.time() - start:.0f}s")
     for task_name in args.tasks:
-        evaluate_task(llm, args, task_name)
+        if args.voters <= 1 and args.answer_temperature == 0:
+            evaluate_task(llm, args, task_name)
+            continue
+        for voter in range(args.voters):
+            evaluate_task(llm, args, task_name, voter)
 
 
 if __name__ == "__main__":

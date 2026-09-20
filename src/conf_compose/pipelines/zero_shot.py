@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Sequence
 
 from conf_compose.confidence_estimators import zero_shot_targets
@@ -17,7 +18,9 @@ def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None
     timings = {} if timings is None else timings
     prompts = [task.prompt(example) for example in examples]
     with _timed(timings, "generation", getattr(llm, "cache", None)):
-        generations = llm.generate(prompts, max_tokens=config.max_tokens, temperature=0.0, logprobs=True)
+        with _answer_scope(llm, config.answer_temperature):
+            generations = llm.generate(prompts, max_tokens=config.max_tokens,
+                                       temperature=config.answer_temperature, logprobs=True)
 
     targets = zero_shot_targets(task, examples, generations)
     records = [_record(task, example, generation, target)
@@ -26,6 +29,18 @@ def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None
         record["confidence"] = output.signals
         record.update(output.details)
     return records
+
+
+@contextmanager
+def _answer_scope(llm, temperature: float):
+    """A sampled answer gets its own execution scope, so it is never also a consistency draw."""
+    original = getattr(llm, "execution", "")
+    if temperature > 0:
+        llm.execution = f"{original}:answer"
+    try:
+        yield
+    finally:
+        llm.execution = original
 
 
 def signal_names(records: Sequence[Dict[str, Any]]) -> List[str]:

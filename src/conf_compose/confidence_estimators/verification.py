@@ -12,10 +12,11 @@ from .context import Target
 
 class SelfVerification:
     def __init__(self, llm, labels: Sequence[str] = VerificationPrompts.labels, top_logprobs: int = 20,
-                 context: bool = False, system: Optional[str] = None):
-        """context=False judges the claim from a fresh prompt; context=True asks the agent inside its own history."""
+                 context: bool = False, claim: bool = False, system: Optional[str] = None):
+        """context=True asks inside the agent's history; claim=True rates an answer with no response attached."""
         self.llm = llm
         self.context = context
+        self.claim = claim
         self.true_label, self.false_label = labels
         self.top_logprobs = top_logprobs
         self.system = system
@@ -33,6 +34,8 @@ class SelfVerification:
         return values
 
     def _ask(self, target: Target):
+        if self.claim:
+            return VerificationPrompts.check_claim(question=target.example.question, answer=target.answer)
         if not self.context:
             return VerificationPrompts.check(question=target.example.question, response=target.response,
                                              answer=target.answer)

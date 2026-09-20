@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 
-def run_dir(out_dir: str, task: str, model: str, n_val: int, n_test: int) -> Path:
-    return Path(out_dir) / task / f"{model.replace('/', '__')}_val{n_val}_test{n_test}"
+def run_dir(out_dir: str, task: str, model: str, n_val: int, n_test: int, suffix: str = "") -> Path:
+    return Path(out_dir) / task / f"{model.replace('/', '__')}{suffix}_val{n_val}_test{n_test}"
 
 
 def split_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:

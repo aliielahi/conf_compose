@@ -16,6 +16,10 @@ class VerificationPrompts:
         "Question: {question}\n\nProposed solution:\n{response}\n\nProposed final answer: {answer}\n\n"
         "Is the proposed final answer correct? Answer with only True or False."
     )
+    check_claim = Template(
+        "Question: {question}\n\nProposed final answer: {answer}\n\n"
+        "Is the proposed final answer correct? Answer with only True or False."
+    )
     check_own = Template("Is your final answer {answer} correct? Answer with only True or False.")
     labels = ("True", "False")
 

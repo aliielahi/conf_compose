@@ -15,6 +15,7 @@ from conf_compose.constants import SAMPLING, SEQUENCE_PROBABILITY
 @dataclass
 class ConfidenceConfig:
     max_tokens: int = 1024
+    answer_temperature: float = 0.0
     scopes: Tuple[str, ...] = tuple(SEQUENCE_PROBABILITY["scopes"])
     tail_fraction: float = SEQUENCE_PROBABILITY["tail_fraction"]
     debias: bool = False

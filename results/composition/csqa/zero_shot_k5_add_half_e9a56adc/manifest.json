@@ -1,0 +1,26 @@
+{
+  "args": {
+    "task": "csqa",
+    "validation": [
+      "results/sweep02/csqa/*/validation.jsonl"
+    ],
+    "test": [
+      "results/sweep02/csqa/*/test.jsonl"
+    ],
+    "source": "zero_shot",
+    "budget": 5,
+    "variant": "add_half",
+    "n_boot": 1000,
+    "out_dir": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/composition"
+  },
+  "inputs": {
+    "results/sweep02/csqa/vllm__g3-12i_val200_test500/validation.jsonl": "b8c3751e536ec6ee",
+    "results/sweep02/csqa/vllm__l31-8bi_val200_test500/validation.jsonl": "c0f2286a1475947e",
+    "results/sweep02/csqa/vllm__phi4mii_val200_test500/validation.jsonl": "cef9826aa7eee1bc",
+    "results/sweep02/csqa/vllm__q3-4bi_val200_test500/validation.jsonl": "12a1ded24969f5cd",
+    "results/sweep02/csqa/vllm__g3-12i_val200_test500/test.jsonl": "5eff5a43496bd40b",
+    "results/sweep02/csqa/vllm__l31-8bi_val200_test500/test.jsonl": "d45030caac505f93",
+    "results/sweep02/csqa/vllm__phi4mii_val200_test500/test.jsonl": "e15d15e2051a75f1",
+    "results/sweep02/csqa/vllm__q3-4bi_val200_test500/test.jsonl": "2023ba1fe595c87c"
+  }
+}

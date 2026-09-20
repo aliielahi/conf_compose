@@ -11,14 +11,16 @@ from conf_compose.constants import BASELINES, LOGS_DIR, RESULTS_DIR, ROOT, TASKS
 from conf_compose.pipelines.runs import run_dir
 
 
-def jobs_from_grid(grid, results: Path, force: bool):
-    """One (model, tasks) job per model in the grid, keeping only tasks without a report."""
+def jobs_from_grid(grid, results: Path, force: bool, voters: int = 1):
+    """One (model, tasks) job per model in the grid, keeping only tasks whose every voter has a report."""
     per_model: dict = {}
+    suffixes = [""] if voters <= 1 else [f"_rep{i}" for i in range(voters)]
     for group in grid:
         for model in group["models"]:
             for task in group["tasks"]:
-                done = (run_dir(str(results), task, model, TASKS[task]["n_val"],
-                                TASKS[task]["n_test"]) / "report.json").exists()
+                done = all((run_dir(str(results), task, model, TASKS[task]["n_val"],
+                                    TASKS[task]["n_test"], suffix) / "report.json").exists()
+                           for suffix in suffixes)
                 if force or not done:
                     per_model.setdefault(model, [])
                     if task not in per_model[model]:
@@ -47,11 +49,14 @@ def main():
     parser.add_argument("--models", nargs="+", help="override the grid's models")
     parser.add_argument("--tasks", nargs="+", help="override the grid's tasks")
     parser.add_argument("--parallel", type=int, default=1, help="models sharing the GPU at once")
+    parser.add_argument("--voters", type=int, default=1, help="independent voters per model, passed through")
     parser.add_argument("--force", action="store_true", help="rerun even if report.json exists")
     parser.add_argument("--dry-run", action="store_true", help="print the pending jobs and exit")
     parser.add_argument("extra", nargs=argparse.REMAINDER, help="arguments after -- go to eval_zero_shot.py")
     args = parser.parse_args()
     extra = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
+    if args.voters > 1:
+        extra = [*extra, "--voters", str(args.voters)]
 
     grid = BASELINES["grid"]
     if args.models or args.tasks:
@@ -60,7 +65,7 @@ def main():
         grid = [{"models": models, "tasks": tasks}]
 
     results, logs = RESULTS_DIR / args.sweep, LOGS_DIR / args.sweep
-    jobs = jobs_from_grid(grid, results, args.force)
+    jobs = jobs_from_grid(grid, results, args.force, args.voters)
     print(f"sweep {args.sweep}: {len(jobs)} model(s) pending", flush=True)
     for model, tasks in jobs:
         print(f"  {model}: {' '.join(tasks)}", flush=True)
