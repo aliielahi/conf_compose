@@ -98,15 +98,16 @@ class SequenceProbability:
         return results
 
     def _spans(self, task, target: Target):
+        """response: scores the response itself; answer scopes: score target.answer, the designated claim."""
         context, response = target.conversation, target.response
         if self.scope == "response":
             return (context, "", response) if response else None
-        answer = task.extract_answer(response)
-        if answer is None:
+        if target.answer is None:
             return None
-        if self.scope == "answer":
-            return context, response[:answer.start], answer.text
-        return context, task.answer_prefix, answer.text
+        if self.scope == "answer_no_reasoning":
+            return context, task.answer_prefix, target.answer
+        start = response.rfind(target.answer)
+        return (context, response[:start], target.answer) if start >= 0 else None
 
 
 def _mean(values: Sequence[float]) -> float:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -29,6 +30,7 @@ class Turn:
     execution: str = ""
     settings: Dict[str, Any] = field(default_factory=dict)
     confidence: Dict[str, Optional[float]] = field(default_factory=dict)
+    details: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
     @property
@@ -61,15 +63,22 @@ def append_traces(path: Path, traces: Sequence[ExampleTrace]) -> None:
 
 
 def read_traces(path: Path) -> List[ExampleTrace]:
+    """Read saved traces, ignoring a truncated final line from an interrupted write."""
     if not path.exists():
         return []
     traces = []
-    for line in path.read_text().splitlines():
-        payload = json.loads(line)
+    for number, line in enumerate(path.read_text().splitlines(), start=1):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            warnings.warn(f"{path}: ignoring incomplete line {number}")
+            continue
         turns = [Turn(**turn) for turn in payload.pop("turns")]
         traces.append(ExampleTrace(turns=turns, **payload))
     return traces
 
 
 def completed_ids(path: Path) -> set:
-    return {trace.example_id for trace in read_traces(path)}
+    """Examples that finished cleanly; ones with a failed turn are retried."""
+    return {trace.example_id for trace in read_traces(path)
+            if all(turn.error is None and turn.response for turn in trace.turns)}

@@ -5,7 +5,7 @@ import json
 import time
 from pathlib import Path
 
-from conf_compose.constants import CACHE_DIR, DEBATE, TASKS, VLLM
+from conf_compose.constants import CACHE_DIR, DEBATE, SEED, TASKS, VLLM
 from conf_compose.data import get_task
 from conf_compose.debate import append_traces, completed_ids, read_traces
 from conf_compose.debate.confidence import add_confidence
@@ -60,9 +60,18 @@ def main():
         config.consistency_samples = args.consistency_samples
 
     memory = args.gpu_memory_utilization / len(models)
-    llms = [LLM(model, cache_dir=args.cache_dir, execution=args.execution,
+    llms = [LLM(model, cache_dir=args.cache_dir, execution=f"{args.execution}:a{agent}", seed=SEED + agent,
                 gpu_memory_utilization=memory, max_model_len=args.max_model_len, quiet=not args.verbose)
-            for model in models]
+            for agent, model in enumerate(models)]
+
+    settings = {"models": models, "execution": args.execution, "config": config.to_dict()}
+    settings_path = out_path.with_suffix(".config.json")
+    if done and settings_path.exists():
+        saved = json.loads(settings_path.read_text())["settings"]
+        if saved != settings:
+            raise SystemExit(f"{out_path} was written with different settings; use --force to rescore\n"
+                             f"saved:   {saved}\ncurrent: {settings}")
+    settings_path.write_text(json.dumps({"trace": str(trace_path), "settings": settings}, indent=2))
 
     start, timings = time.time(), {}
     for begin in range(0, len(pending), args.batch_size):

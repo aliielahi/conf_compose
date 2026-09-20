@@ -22,6 +22,7 @@ class ConfidenceConfig:
     verbal_temperature: float = SAMPLING["verbal_temperature"]
     verbal_repeats: int = SAMPLING["verbal_repeats"]
     verification: bool = True
+    verification_context: bool = True
     consistency_temperatures: Tuple[float, ...] = (SAMPLING["consistency_temperature"],)
     consistency_samples: int = SAMPLING["consistency_samples"]
     top_p: float = SAMPLING["top_p"]
@@ -62,12 +63,14 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
             output.signals.update({name: getattr(result, attr) if result else None for name, attr in names.items()})
             output.details.setdefault("token_logprobs", {})[scope] = result.token_logprobs if result else None
 
-    if config.verification:
-        with _timed(timings, "verification", cache):
-            values = SelfVerification(llm).estimate(task, targets)
-        _check_stage("verification", values, targets)
+    for name, in_context in (("verification", False), ("verification_context", True)):
+        if not (config.verification if not in_context else config.verification_context):
+            continue
+        with _timed(timings, name, cache):
+            values = SelfVerification(llm, context=in_context).estimate(task, targets)
+        _check_stage(name, values, targets)
         for output, value in zip(outputs, values):
-            output.signals["verification"] = value
+            output.signals[name] = value
 
     if config.verbalized:
         estimator = VerbalizedConfidence(llm, repeats=config.verbal_repeats, temperature=config.verbal_temperature,

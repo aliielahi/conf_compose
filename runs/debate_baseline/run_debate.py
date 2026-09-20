@@ -5,9 +5,10 @@ import json
 import time
 from pathlib import Path
 
-from conf_compose.constants import CACHE_DIR, DEBATE, RESULTS_DIR, TASKS, VLLM
+from conf_compose.constants import CACHE_DIR, DEBATE, RESULTS_DIR, SEED, TASKS, VLLM
 from conf_compose.data import get_task
 from conf_compose.debate import DebateConfig, run_debate
+from conf_compose.debate.analysis import changed
 from conf_compose.utils.llm_calls import LLM
 
 
@@ -21,6 +22,8 @@ def parse_args():
     parser.add_argument("--share-confidence", action="store_true", help="show peer confidence in later rounds")
     parser.add_argument("--execution", default=DEBATE["execution"], help="id separating fresh sampling runs")
     parser.add_argument("--max-tokens", type=int)
+    parser.add_argument("--temperature", type=float, default=0.0,
+                        help="agents answer greedily at 0; use >0 so identical models differ in round 0")
     parser.add_argument("--batch-size", type=int, default=100, help="examples traced before appending to disk")
     parser.add_argument("--gpu-memory-utilization", type=float, default=VLLM["gpu_memory_utilization"])
     parser.add_argument("--max-model-len", type=int, default=VLLM["max_model_len"])
@@ -33,8 +36,8 @@ def parse_args():
 def load_models(args):
     memory = args.gpu_memory_utilization / len(args.models)
     llms = []
-    for model in args.models:
-        llms.append(LLM(model, cache_dir=args.cache_dir, execution=args.execution,
+    for agent, model in enumerate(args.models):
+        llms.append(LLM(model, cache_dir=args.cache_dir, execution=f"{args.execution}:a{agent}", seed=SEED + agent,
                         gpu_memory_utilization=memory, max_model_len=args.max_model_len, quiet=not args.verbose,
                         engine_kwargs={"max_num_seqs": VLLM["max_num_seqs"],
                                        "max_num_batched_tokens": VLLM["max_num_batched_tokens"]}))
@@ -48,7 +51,7 @@ def main():
     examples = task.load(args.split, n=args.n or defaults["n_test"])
     config = DebateConfig(models=tuple(args.models), rounds=args.rounds, share_confidence=args.share_confidence,
                           execution=args.execution, max_tokens=args.max_tokens or defaults["max_tokens"],
-                          word_limit=defaults["word_limit"])
+                          word_limit=defaults["word_limit"], temperature=args.temperature)
 
     start = time.time()
     llms = load_models(args)
@@ -56,20 +59,20 @@ def main():
           f"rounds={config.rounds} execution={config.execution}")
 
     agents = "_".join(model.split("/")[-1] for model in args.models)
-    name = f"{agents}_r{config.rounds}_{config.execution}_n{len(examples)}.jsonl"
+    name = f"{agents}_r{config.rounds}_{args.split}_{config.execution}_n{len(examples)}.jsonl"
     out_path = Path(args.out_dir) / args.task / name
     traces = run_debate(llms, task, examples, config, out_path, batch_size=args.batch_size)
 
-    flips = sum(_flipped(trace) for trace in traces)
+    flips = sum(_flipped(task, trace) for trace in traces)
     print(f"\ntraced {len(traces)} examples in {time.time() - start:.0f}s | answer changed after debate: {flips}")
     (out_path.with_suffix(".config.json")).write_text(json.dumps({"args": vars(args), "config": config.to_dict()},
                                                                  indent=2))
     print(f"saved {out_path}")
 
 
-def _flipped(trace) -> bool:
+def _flipped(task, trace) -> bool:
     first, last = trace.round_turns(0), trace.round_turns(max(turn.round for turn in trace.turns))
-    return any(a.answer != b.answer for a, b in zip(first, last))
+    return any(changed(task, a.answer, b.answer) for a, b in zip(first, last))
 
 
 if __name__ == "__main__":

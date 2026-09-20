@@ -28,33 +28,37 @@ def confidence_report(validation: Sequence[Dict[str, Any]], test: Sequence[Dict[
         report["constant"].update(auroc=float("nan"), auarc=float(test_correct.mean()), missing=0)
 
     for name in signal_names(test):
-        conf = np.array(signal(test, name))
-        row = {
-            "auroc": auroc(conf, test_correct),
-            "auroc_ci": bootstrap_ci(auroc, conf, test_correct, n_boot),
-            "auarc": auarc(conf, test_correct),
-            "auarc_ci": bootstrap_ci(auarc, conf, test_correct, n_boot),
-            "missing": sum(record["confidence"][name] is None for record in test),
-        }
-        row.update(_reliability(conf, test_correct, "raw"))
+        scored = [record for record in test if record["confidence"][name] is not None]
+        conf = np.array([record["confidence"][name] for record in scored])
+        correct = np.array([record["correct"] for record in scored], dtype=float)
+        row = {"missing": len(test) - len(scored), "coverage": len(scored) / len(test)}
+        if len(scored) < 2 or len(set(correct.tolist())) < 2:
+            report[name] = row
+            continue
+        row.update({"auroc": auroc(conf, correct), "auroc_ci": bootstrap_ci(auroc, conf, correct, n_boot),
+                    "auarc": auarc(conf, correct), "auarc_ci": bootstrap_ci(auarc, conf, correct, n_boot)})
+        row.update(_reliability(conf, correct, "raw"))
         if can_calibrate:
-            calibrated = CALIBRATORS[calibrator]().fit(signal(validation, name), val_correct).predict(conf)
-            row.update(_reliability(calibrated, test_correct, "cal"))
+            fit = [record for record in validation if record["confidence"][name] is not None]
+            if fit and len({record["correct"] for record in fit}) == 2:
+                model = CALIBRATORS[calibrator]().fit([r["confidence"][name] for r in fit],
+                                                      [r["correct"] for r in fit])
+                row.update(_reliability(model.predict(conf), correct, "cal"))
         report[name] = row
     return report
 
 
 def format_report(report: Dict[str, Dict[str, Any]]) -> List[str]:
     header = (f"{'signal':<30}{'auroc':>8}{'95% CI':>16}{'auarc':>8}{'raw_ece':>9}{'raw_brier':>10}"
-              f"{'cal_ece':>9}{'cal_brier':>10}{'cal_nll':>9}{'missing':>8}")
+              f"{'cal_ece':>9}{'cal_brier':>10}{'cal_nll':>9}{'coverage':>10}")
     lines = [header]
     for name, row in report.items():
-        low, high = row.get("auroc_ci", (nan, nan))
+        low, high = row.get("auroc_ci") or (nan, nan)
         ci = "—" if low != low else f"[{low:.3f}, {high:.3f}]"
         values = [_cell(row.get(key), width) for key, width in
                   (("auroc", 8), ("auarc", 8), ("raw_ece", 9), ("raw_brier", 10), ("cal_ece", 9), ("cal_brier", 10),
                    ("cal_nll", 9))]
-        lines.append(f"{name:<30}{values[0]}{ci:>16}{''.join(values[1:])}{row['missing']:>8}")
+        lines.append(f"{name:<30}{values[0]}{ci:>16}{''.join(values[1:])}{_cell(row.get('coverage'), 10)}")
     return lines
 
 
