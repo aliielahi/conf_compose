@@ -1,0 +1,35 @@
+{
+  "args": {
+    "models": [
+      "vllm/q3-4bi",
+      "vllm/l31-8bi"
+    ],
+    "task": "gsm8k",
+    "split": "validation",
+    "n": 150,
+    "rounds": 1,
+    "share_confidence": false,
+    "execution": "exec01",
+    "max_tokens": null,
+    "temperature": 0.0,
+    "batch_size": 100,
+    "gpu_memory_utilization": 0.7,
+    "max_model_len": 8192,
+    "verbose": false,
+    "out_dir": "/workspace/results/debate",
+    "cache_dir": "/workspace/cache"
+  },
+  "config": {
+    "models": [
+      "vllm/q3-4bi",
+      "vllm/l31-8bi"
+    ],
+    "rounds": 1,
+    "share_confidence": false,
+    "execution": "exec01",
+    "max_tokens": 1024,
+    "word_limit": 250,
+    "temperature": 0.0,
+    "sampling": {}
+  }
+}

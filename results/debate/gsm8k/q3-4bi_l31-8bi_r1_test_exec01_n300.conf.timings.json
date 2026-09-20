@@ -1,0 +1,56 @@
+{
+  "agent0": {
+    "seq_response": {
+      "seconds": 0.00079345703125,
+      "cache_hits": 0,
+      "cache_misses": 0
+    },
+    "verification": {
+      "seconds": 2.8651626110076904,
+      "cache_hits": 0,
+      "cache_misses": 100
+    },
+    "verification_context": {
+      "seconds": 4.500125169754028,
+      "cache_hits": 0,
+      "cache_misses": 100
+    },
+    "verbalized": {
+      "seconds": 1.9181890487670898,
+      "cache_hits": 0,
+      "cache_misses": 300
+    },
+    "consistency_t0.7": {
+      "seconds": 62.391520261764526,
+      "cache_hits": 0,
+      "cache_misses": 500
+    }
+  },
+  "agent1": {
+    "seq_response": {
+      "seconds": 0.00028204917907714844,
+      "cache_hits": 0,
+      "cache_misses": 0
+    },
+    "verification": {
+      "seconds": 5.4083967208862305,
+      "cache_hits": 0,
+      "cache_misses": 100
+    },
+    "verification_context": {
+      "seconds": 7.581487417221069,
+      "cache_hits": 0,
+      "cache_misses": 100
+    },
+    "verbalized": {
+      "seconds": 3.1989059448242188,
+      "cache_hits": 0,
+      "cache_misses": 300
+    },
+    "consistency_t0.7": {
+      "seconds": 119.78332233428955,
+      "cache_hits": 0,
+      "cache_misses": 500
+    }
+  }
+}
