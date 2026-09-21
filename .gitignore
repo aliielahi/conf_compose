@@ -14,3 +14,5 @@ res.txt
 logs/
 cache/
 *.egg-info/
+
+/results/
