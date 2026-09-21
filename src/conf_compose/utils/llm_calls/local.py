@@ -39,7 +39,11 @@ class LocalLLM(BaseLLM):
         return rendered
 
     def encode(self, texts: Sequence[str], **kwargs: Any):
-        return self.tokenizer(list(texts), add_special_tokens=not self.apply_chat_template, **kwargs)
+        """An empty batch never reaches the tokenizer, which cannot describe one."""
+        texts = list(texts)
+        if not texts:
+            return {"input_ids": [], "offset_mapping": []}
+        return self.tokenizer(texts, add_special_tokens=not self.apply_chat_template, **kwargs)
 
     def score(self, prompts: Sequence[PromptLike], continuations: Sequence[str],
               prefixes: Optional[Sequence[str]] = None, system: Optional[str] = None) -> List[List[float]]:
@@ -55,7 +59,8 @@ class LocalLLM(BaseLLM):
             if hit is not None:
                 scored[request] = hit["logprobs"]
         todo = sorted(set(requests) - scored.keys(), key=lambda r: len(r[0]) + len(r[1]), reverse=True)
-        for request, logprobs in zip(todo, self._score_unique([c for c, _ in todo], [t for _, t in todo])):
+        fresh = self._score_unique([c for c, _ in todo], [t for _, t in todo]) if todo else []
+        for request, logprobs in zip(todo, fresh):
             scored[request] = logprobs
             if self.cache:
                 self.cache.set(self._score_key(*request), {"logprobs": logprobs})

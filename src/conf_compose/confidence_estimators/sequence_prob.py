@@ -79,6 +79,8 @@ class SequenceProbability:
     def estimate(self, task, targets: Sequence[Target]) -> List[Optional[SequenceProbResult]]:
         rows = [self._spans(task, target) for target in targets]
         valid = [i for i, row in enumerate(rows) if row is not None]
+        if not valid:
+            return [None] * len(rows)
         prompts, prefixes, continuations = ([rows[i][k] for i in valid] for k in range(3))
         main = self.llm.score(prompts, continuations, prefixes, system=self.system)
 

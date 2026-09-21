@@ -151,3 +151,32 @@ def test_choice_example_refuses_to_silently_drop_options():
     from conf_compose.data.multiple_choice import _choice_example
     with pytest.raises(ValueError):
         _choice_example("ABC", "q-0", "why?", ["a", "b", "c", "d"], 0)
+
+
+def test_scoring_a_fully_cached_batch_never_calls_the_tokenizer():
+    """Every score cached means an empty todo list, which must not reach the backend."""
+    from conf_compose.utils.llm_calls.local import LocalLLM
+
+    class Stub(LocalLLM):
+        provider = "stub"
+
+        def __init__(self):
+            super().__init__("stub", progress=False)
+            self.tokenizer = _explode
+            self.calls = 0
+
+        def render(self, system, messages):
+            return messages[0]["content"]
+
+        def _score_unique(self, contexts, continuations):
+            self.calls += 1
+            return [[-0.1]] * len(contexts)
+
+    llm = Stub()
+    assert llm.score(["q"], ["a"]) == [[-0.1]]
+    assert llm.calls == 1
+    assert llm.encode([]) == {"input_ids": [], "offset_mapping": []}
+
+
+def _explode(*args, **kwargs):
+    raise AssertionError("tokenizer called with an empty batch")
