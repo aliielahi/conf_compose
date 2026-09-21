@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 from .context import Target
@@ -14,6 +14,7 @@ class ConsistencyResult:
     answers: List[Optional[str]]
     cluster_sizes: List[int]
     agreement: Optional[float]
+    responses: List[str] = field(default_factory=list, repr=False)
 
     @property
     def samples(self) -> int:
@@ -61,7 +62,7 @@ class ConsistencyConfidence:
             agreement = None
             if prediction is not None:
                 agreement = sum(task.equivalent(a, prediction) for a in valid) / len(answers)
-            results.append(ConsistencyResult(answers, _cluster_sizes(task, valid), agreement))
+            results.append(ConsistencyResult(answers, _cluster_sizes(task, valid), agreement, list(responses)))
         return results
 
 

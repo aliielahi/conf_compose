@@ -97,6 +97,7 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
             output.signals.update({name: result.agreement, f"{name}_margin": result.margin,
                                    f"{name}_entropy": result.entropy_confidence})
             output.details.setdefault("sampled_answers", {})[name] = result.answers
+            output.details.setdefault("sampled_responses", {})[name] = result.responses
     return outputs
 
 
