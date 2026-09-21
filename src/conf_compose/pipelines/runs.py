@@ -48,3 +48,31 @@ def timing_line(timings: Dict[str, Dict[str, float]]) -> str:
     parts = [f"{stage}={t['seconds']:.0f}s (cache {t['cache_hits']}/{t['cache_hits'] + t['cache_misses']})"
              for stage, t in timings.items()]
     return "wall time incl. cache reuse: " + " ".join(parts)
+
+
+def expand_globs(paths: Sequence[str]) -> List[str]:
+    """Every path a glob matches, in sorted order; a literal path passes through unchanged."""
+    import glob
+
+    expanded: List[str] = []
+    for path in paths:
+        expanded += sorted(glob.glob(path)) or [path]
+    return expanded
+
+
+def file_hashes(paths: Sequence[str]) -> Dict[str, str]:
+    import hashlib
+
+    return {path: hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16] for path in paths}
+
+
+def source_hash(package: str) -> str:
+    """Hash of a package's sources, so a changed implementation cannot overwrite an old run."""
+    import hashlib
+    import importlib
+
+    root = Path(importlib.import_module(package).__file__).parent
+    digest = hashlib.sha256()
+    for path in sorted(root.glob("*.py")):
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]

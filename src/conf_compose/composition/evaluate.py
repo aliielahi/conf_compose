@@ -75,6 +75,13 @@ def fit_intercepts(rows: Sequence[Row]) -> Dict[str, float]:
     return intercepts
 
 
+def best_by_validation(rows: Sequence[Row], report: Dict[str, Dict[str, Any]], prefix: str) -> str:
+    """The strongest source by validation AUROC, selected without ever touching test."""
+    options = [(report.get(row.method, {}).get("auroc") or 0.0, row.method)
+               for row in rows if row.method.startswith(prefix)]
+    return max(options)[1] if options else ""
+
+
 def _paired(reference: Row, row: Row, n_boot: int) -> Dict[str, Any]:
     """Bootstrap the AUROC difference over shared question ids, each method against its own labels."""
     shared = sorted(set(reference.example_ids) & set(row.example_ids))

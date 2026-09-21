@@ -1,16 +1,16 @@
 """Independent-voting composition on round-0 evidence: fixed-answer confidence and selection, offline."""
 
 import argparse
-import glob
 import hashlib
 import json
 from pathlib import Path
 
-from conf_compose.composition import (Row, evaluate, fit_intercepts, format_table, fixed_answer_methods,
-                                      from_debate_traces, from_zero_shot, selection_methods)
+from conf_compose.composition import (Row, anchor_prior, evaluate, fit_intercepts, fixed_answer_methods,
+                                      format_table, from_debate_traces, from_zero_shot, selection_methods)
 from conf_compose.constants import RESULTS_DIR, TASKS
 from conf_compose.data import Example, get_task
 from conf_compose.debate import read_traces
+from conf_compose.pipelines.runs import expand_globs, file_hashes, source_hash
 
 FIXED_REFERENCE = "support_r0_a0"
 SELECTION_REFERENCE = "linear_pool"
@@ -29,35 +29,23 @@ def parse_args():
     return parser.parse_args()
 
 
+def best_support_stream(rows) -> str:
+    """Strongest individual sample-support stream by validation AUROC, chosen without touching test."""
+    import numpy as np
+
+    from conf_compose.utils.metrics import auroc
+    options = []
+    for row in rows:
+        scores, correct = np.array(row.scores, dtype=float), np.array(row.correct, dtype=float)
+        if row.method.startswith("support_r") and len(scores) > 2 and 0 < correct.sum() < len(correct):
+            options.append((auroc(scores, correct), row.method))
+    return max(options)[1] if options else FIXED_REFERENCE
+
+
 def load_items(paths, source: str):
     if source == "debate":
         return from_debate_traces(read_traces(Path(paths[0])), rounds=(0,))
     return from_zero_shot({Path(p).parent.name: Path(p) for p in sorted(paths)})
-
-
-def anchor_prior(task, items) -> float:
-    """Laplace-smoothed validation correctness rate of the anchor's answer; a reference rate, not a model prior."""
-    correct = sum(task.is_correct(_anchor(item).answer, Example(item.example_id, item.question, item.gold))
-                  for item in items if _anchor(item) and _anchor(item).answer is not None)
-    return (correct + 1) / (len(items) + 2)
-
-
-def best_single_stream(rows) -> str:
-    """Strongest individual sample-support stream by validation AUROC, chosen without touching test."""
-    from conf_compose.utils.metrics import auroc
-    import numpy as np
-    candidates = []
-    for row in rows:
-        if not row.method.startswith("support_r"):
-            continue
-        scores, correct = np.array(row.scores, dtype=float), np.array(row.correct, dtype=float)
-        if len(scores) > 2 and 0 < correct.sum() < len(correct):
-            candidates.append((auroc(scores, correct), row.method))
-    return max(candidates)[1] if candidates else FIXED_REFERENCE
-
-
-def _anchor(item):
-    return next((s for s in item.round_streams((0,)) if s.agent == 0), None)
 
 
 def predictions(task, items, args, prior=None):
@@ -93,15 +81,15 @@ def rows_from(predictions_by_method, total: int):
 def main():
     args = parse_args()
     task = get_task(args.task)
-    validation = load_items(_expand(args.validation), args.source)
-    test = load_items(_expand(args.test), args.source)
+    validation = load_items(expand_globs(args.validation), args.source)
+    test = load_items(expand_globs(args.test), args.source)
     print(f"{args.task}: validation={len(validation)} test={len(test)} streams/example="
           f"{len(validation[0].round_streams((0,)))} budget={args.budget} smoothing={args.variant}")
 
     prior = anchor_prior(task, validation)
     val_fixed, val_selection = predictions(task, validation, args, prior)
     test_fixed, test_selection = predictions(task, test, args, prior)
-    best_single = best_single_stream(rows_from(val_fixed, len(validation)))
+    best_single = best_support_stream(rows_from(val_fixed, len(validation)))
     print(f"validation prior (anchor correctness) = {prior:.3f} | best single stream on validation = {best_single}")
 
     report = {"prior": prior, "best_single_stream": best_single}
@@ -118,34 +106,17 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "metrics.json").write_text(json.dumps(report, indent=2))
     (out_dir / "manifest.json").write_text(json.dumps(
-        {"args": vars(args), "inputs": _hashes(args), "code": _code_hash()}, indent=2))
+        {"args": vars(args), "inputs": _hashes(args), "code": source_hash("conf_compose.composition")}, indent=2))
     print(f"\nsaved {out_dir}")
 
 
-def _expand(paths):
-    expanded = []
-    for path in paths:
-        expanded += sorted(glob.glob(path)) or [path]
-    return expanded
-
-
 def _hashes(args):
-    return {path: hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
-            for path in _expand(args.validation) + _expand(args.test)}
-
-
-def _code_hash() -> str:
-    """Hash of the composition sources, so a changed implementation cannot overwrite an old run."""
-    root = Path(__file__).resolve().parents[2] / "src" / "conf_compose" / "composition"
-    digest = hashlib.sha256()
-    for path in sorted(root.glob("*.py")):
-        digest.update(path.read_bytes())
-    return digest.hexdigest()[:12]
+    return file_hashes(expand_globs(args.validation) + expand_globs(args.test))
 
 
 def _run_id(args) -> str:
     payload = json.dumps({"inputs": _hashes(args), "budget": args.budget, "variant": args.variant,
-                          "code": _code_hash()}, sort_keys=True)
+                          "code": source_hash("conf_compose.composition")}, sort_keys=True)
     return f"{args.source}_k{args.budget}_{args.variant}_{hashlib.sha256(payload.encode()).hexdigest()[:8]}"
 
 

@@ -16,3 +16,4 @@ cache/
 *.egg-info/
 
 /results/
+.pytest_cache
