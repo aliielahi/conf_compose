@@ -71,7 +71,8 @@ class Panel:
 
 
 def base_model(model: str) -> str:
-    """Model tag with any repeat/seed suffix removed, so two runs of one model count as one model."""
+    """Model tag with decoding, voter and digest stripped, so two runs of one model count as one model."""
+    model = model.split("--")[0]
     for marker in ("_seed", "_rep", "_run"):
         if marker in model:
             return model.split(marker)[0]

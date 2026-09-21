@@ -10,6 +10,7 @@ import re
 import sqlite3
 import threading
 import time
+import sys
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -123,6 +124,24 @@ class _LoopState:
         self.semaphore = asyncio.Semaphore(concurrency)
         self.throttle_lock = asyncio.Lock()
         self.next_slot = 0.0
+
+
+class _StepLog:
+    """Stand-in for tqdm when output is a file: one line every `every` percent, no carriage returns."""
+
+    def __init__(self, total: int, label: str, every: int = 10):
+        self.total, self.label, self.every = total, label, every
+        self.done, self.shown = 0, 0
+
+    def update(self, n: int = 1) -> None:
+        self.done += n
+        percent = 100 * self.done // self.total
+        if percent >= self.shown + self.every:
+            self.shown = percent - percent % self.every
+            print(f"    {self.label}: {self.shown:3d}% ({self.done}/{self.total})", flush=True)
+
+    def close(self) -> None:
+        pass
 
 
 class BaseLLM:
@@ -302,7 +321,9 @@ class BaseLLM:
     def _progress_bar(self, total: int):
         if not self.progress or total < 2:
             return None
-        return tqdm(total=total, desc=f"{self.provider}/{self.model}", leave=False)
+        if sys.stderr.isatty():
+            return tqdm(total=total, desc=f"{self.provider}/{self.model}", leave=False)
+        return _StepLog(total, f"{self.provider}/{self.model}")
 
     def _warn_once(self, tag: str, message: str) -> None:
         if tag not in self._warned:

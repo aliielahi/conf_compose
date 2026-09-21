@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -34,10 +35,13 @@ class GridConfig:
 
 
 def short_name(name: str) -> str:
-    """Trim a run directory down to its model tag, keeping any family suffix after a colon."""
-    model, _, rest = name.partition(":")
-    model = model.replace("vllm__", "").split("_val")[0]
-    return f"{model}:{rest}" if rest else model
+    """Trim a run directory to model plus voter, keeping any estimator-family suffix after a colon."""
+    body, _, rest = name.partition(":")
+    parts = body.split("--")
+    model = parts[0].replace("vllm__", "").replace("hf__", "").split("_val")[0]
+    voter = re.search(r"v(\d+)", parts[1]) if len(parts) > 1 else re.search(r"_rep(\d+)", body)
+    label = f"{model.split('_rep')[0]}.v{voter.group(1)}" if voter else model
+    return f"{label}:{rest}" if rest else label
 
 
 def model_key(name: str) -> str:

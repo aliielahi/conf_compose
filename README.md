@@ -1,25 +1,57 @@
 # conf_compose
 
-## zeroshot baselines and confidence
+Confidence composition for multi-agent language model systems: estimate whether a system's answer is right by
+pooling many agents' confidence signals.
 
-Run the whole grid (models x tasks from `src/conf_compose/constants.json`) detached: `bash runs/sweeps/sweep01-zs_baseline.sh` — add `--dry-run` first to see what is pending.
+## layout
 
-Each model loads once, answers every task greedily, and gets all confidence estimators (sequence probability, P(True) verification, verbalized, sampling consistency); per-run logs land in `logs/sweep01/`, per-run records and `report.json` in `results/sweep01/<task>/<model>_val<n>_test<n>/`, and finished runs are skipped on a rerun.
+- `src/conf_compose/` — all logic. Tasks, LLM backends, confidence estimators, metrics, pipelines, composition.
+- `runs/inference/` — the only place that loads a model.
+- `runs/experiment*/` — one experiment each, consuming the inference store and writing to `results/<same name>/`.
+- `tests/` — regression tests over `src`.
 
-Summarize with `python runs/zeroshot_baseline/summarize.py` (writes `results/sweep01/summary.md` and `summary.csv`); `python runs/zeroshot_baseline/rereport.py --sweep sweep01` recomputes reports from saved records without a GPU.
+## inference store
 
-## voting panels
+Every model output lives once in `results/inferences/<task>/<model>--<decoding>--<digest>/`. The digest covers
+task, model, split sizes, max tokens, answer temperature, voter index, consistency samples and which estimators
+ran, so two cells with the same digest are interchangeable and two with different digests are never confused.
 
-Sweep the offline voting grid on the saved zero-shot records (no GPU): `bash runs/sweeps/sweep03-voting_panels.sh` — set `SOURCE=results/sweepNN` to point at a different generation sweep.
+```bash
+# see what a request would generate
+python runs/inference/run_inference.py --tasks gsm8k csqa --models vllm/q3-4bi --dry-run
 
-Each cell fixes one target answer (the anchor's, and the ensemble majority) and varies panel size 2-5, model set (heterogeneous over every model subset against homogeneous sub-streams of one model), samples per stream 1-5, and estimator family (consistency, verification, verbalized); logs land in `logs/sweep03/`, metrics, per-example predictions and a manifest in `results/composition/<task>/panels_<target>_<hash>/`.
+# greedy answers over the full test split, every confidence signal
+python runs/inference/run_inference.py --tasks gsm8k --models vllm/q3-4bi vllm/l31-8bi \
+  --n-val 0 --n-test 0 --all-signals
 
-Summarize with `python runs/composition/summarize_panels.py --metric auroc --rule mean` for the panel-size curve, the matched sampled-generation comparison, and the family and rule cuts.
+# five independent sampled voters per model, for the voting experiment
+python runs/inference/run_inference.py --tasks csqa boolq --models vllm/q3-4bi \
+  --answer-temperature 0.7 --voters 5 --no-verbalized
+```
 
-## independent voters (GPU)
+`--n-test 0` means the whole split unsampled; omitting it uses the per-task default in `constants.json`.
 
-`VOTERS=5 bash runs/sweeps/sweep04-voters.sh` generates, per model and task, VOTERS separate answers at T=0.7, each with its own consistency samples and its own sampling identity (`_rep<i>` directories); `DRY_RUN=1` lists pending work first and `--skip-existing` makes it resumable.
+## experiments
 
-Then `bash runs/sweeps/sweep04-score_targets.sh` has every model verify the panel's anchor answer and its majority-vote answer, writing `results/sweep04/<task>/target_verification_<model>_<split>.json`.
+Each declares the inferences it needs, generates only what is missing, then analyses. `--local-only` refuses to
+load a model and names what the store still owes.
 
-Feed both into the offline panels with `--validation 'results/sweep04/<task>/*/validation.jsonl' --test '...' --target-scores 'results/sweep04/<task>/target_verification_*.json'`.
+| experiment | question |
+|---|---|
+| `experiment01-zeroshot_estimators` | which confidence estimator ranks one model's own answers best |
+| `experiment02-voting_composition` | does pooling across independent voters beat one voter at matched budget |
+| `experiment03-debate_composition` | does interaction change how useful the evidence is |
+
+```bash
+bash runs/experiment02-voting_composition/run.sh          # detached; writes logs/<name>/DONE when finished
+cat results/experiment02-voting_composition/summary.txt
+```
+
+Experiment 02 needs one extra GPU pass before its target-verification arms have data:
+`python runs/experiment02-voting_composition/score_targets.py --task csqa`.
+
+## tests
+
+```bash
+pytest tests/ -q
+```

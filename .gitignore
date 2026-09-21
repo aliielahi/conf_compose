@@ -15,5 +15,8 @@ logs/
 cache/
 *.egg-info/
 
-/results/
+results/
 .pytest_cache
+
+current_run.log
+current_run.tmp

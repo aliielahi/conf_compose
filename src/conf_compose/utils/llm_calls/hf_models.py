@@ -36,4 +36,5 @@ HF_models = {
     'q25-14bi': 'Qwen/Qwen2.5-14B-Instruct',
     'q25-32bi': 'Qwen/Qwen2.5-32B-Instruct',
     'q3-4bi': 'Qwen/Qwen3-4B-Instruct-2507',
+    'q3-8bi': 'Qwen/Qwen3-8B',
 }
