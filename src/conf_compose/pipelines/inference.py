@@ -22,12 +22,14 @@ STORE = RESULTS_DIR / "inferences"
 def load_model(model: str, cache_dir=None, **overrides):
     """One loaded model, with the local-engine defaults and any template mode this alias needs."""
     from conf_compose.constants import CACHE_DIR, HF, VLLM
-    from conf_compose.utils.llm_calls.hf_models import CHAT_TEMPLATE_KWARGS
+    from conf_compose.utils.llm_calls.hf_models import CHAT_TEMPLATE_KWARGS, GENERATION_PREFIX
 
     cache_dir = str(cache_dir or CACHE_DIR)
-    template = CHAT_TEMPLATE_KWARGS.get(model.split("/")[-1])
-    if template:
-        overrides.setdefault("chat_template_kwargs", template)
+    alias = model.split("/")[-1]
+    if CHAT_TEMPLATE_KWARGS.get(alias):
+        overrides.setdefault("chat_template_kwargs", CHAT_TEMPLATE_KWARGS[alias])
+    if GENERATION_PREFIX.get(alias):
+        overrides.setdefault("generation_prefix", GENERATION_PREFIX[alias])
     if model.startswith("hf/"):
         return LLM(model, cache_dir=cache_dir, batch_size=HF["batch_size"], **overrides)
     engine = {"max_num_seqs": VLLM["max_num_seqs"], "max_num_batched_tokens": VLLM["max_num_batched_tokens"]}

@@ -45,3 +45,9 @@ CHAT_TEMPLATE_KWARGS = {
     'q3-8bi': {'enable_thinking': False},
     'q3-14bi': {'enable_thinking': False},
 }
+
+# A Jinja template ignores a kwarg it does not implement, so close the block ourselves when it stays open.
+GENERATION_PREFIX = {
+    'q3-8bi': '<think>\n\n</think>\n\n',
+    'q3-14bi': '<think>\n\n</think>\n\n',
+}
