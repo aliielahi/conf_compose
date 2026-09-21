@@ -127,3 +127,20 @@ def test_majority_answer_respects_equivalence():
 
 def _sig(value):
     return 1 / (1 + math.exp(-value))
+
+
+def test_state_space_follows_the_example_when_option_counts_vary():
+    """TruthfulQA questions carry their own option letters, so the state space is per example."""
+    class VariableChoice(NumericTask):
+        name = "truthfulqa"
+    task = VariableChoice()
+    assert state_space(task, ["A", "C"], list("ABCDEFG")) == list("ABCDEFG")
+    assert state_space(task, ["A", "C"]) == ["A", "C", OTHER]
+
+
+def test_choice_options_are_shuffled_off_the_first_position():
+    """The sources list the correct answer first, so an unshuffled task would always be answered A."""
+    from conf_compose.data.multiple_choice import _choice_example
+    golds = {_choice_example("ABCD", f"q-{i}", "why?", ["right", "w1", "w2", "w3"], 0).answer
+             for i in range(25)}
+    assert len(golds) > 1

@@ -1,12 +1,62 @@
 {
   "seed": 42,
   "tasks": {
-    "gsm8k": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
-    "svamp": {"word_limit": 250, "max_tokens": 1024, "val_pool_size": 200, "n_val": 100, "n_test": 300},
-    "math500": {"word_limit": 600, "max_tokens": 4096, "val_pool_size": 100, "n_val": 100, "n_test": 400},
-    "csqa": {"word_limit": 100, "max_tokens": 512, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
-    "boolq": {"word_limit": 100, "max_tokens": 512, "val_pool_size": 1000, "n_val": 200, "n_test": 500},
-    "prontoqa": {"word_limit": 150, "max_tokens": 640, "val_pool_size": 100, "n_val": 100, "n_test": 400}
+    "gsm8k": {
+      "word_limit": 250,
+      "max_tokens": 1024,
+      "val_pool_size": 1000,
+      "n_val": 200,
+      "n_test": 500
+    },
+    "svamp": {
+      "word_limit": 250,
+      "max_tokens": 1024,
+      "val_pool_size": 200,
+      "n_val": 100,
+      "n_test": 300
+    },
+    "math500": {
+      "word_limit": 600,
+      "max_tokens": 4096,
+      "val_pool_size": 100,
+      "n_val": 100,
+      "n_test": 400
+    },
+    "csqa": {
+      "word_limit": 100,
+      "max_tokens": 512,
+      "val_pool_size": 1000,
+      "n_val": 200,
+      "n_test": 500
+    },
+    "boolq": {
+      "word_limit": 100,
+      "max_tokens": 512,
+      "val_pool_size": 1000,
+      "n_val": 200,
+      "n_test": 500
+    },
+    "prontoqa": {
+      "word_limit": 150,
+      "max_tokens": 640,
+      "val_pool_size": 100,
+      "n_val": 100,
+      "n_test": 400
+    },
+    "truthfulqa": {
+      "word_limit": 100,
+      "max_tokens": 512,
+      "val_pool_size": 200,
+      "n_val": 150,
+      "n_test": 500
+    },
+    "gpqa": {
+      "word_limit": 300,
+      "max_tokens": 1024,
+      "val_pool_size": 50,
+      "n_val": 50,
+      "n_test": 148
+    }
   },
   "sampling": {
     "top_p": 1.0,
@@ -16,13 +66,35 @@
     "verbal_temperature": 1.0,
     "verbal_repeats": 3
   },
-  "sequence_probability": {"scopes": ["response"], "tail_fraction": 0.1},
-  "evaluation": {"calibrator": "beta", "n_boot": 1000},
-  "vllm": {"gpu_memory_utilization": 0.7, "max_model_len": 8192, "max_num_seqs": 512, "max_num_batched_tokens": 32768},
-  "hf": {"batch_size": 32},
-  "paths": {"results": "results", "logs": "logs", "cache": "cache"},
+  "sequence_probability": {
+    "scopes": [
+      "response"
+    ],
+    "tail_fraction": 0.1
+  },
+  "evaluation": {
+    "calibrator": "beta",
+    "n_boot": 1000
+  },
+  "vllm": {
+    "gpu_memory_utilization": 0.7,
+    "max_model_len": 8192,
+    "max_num_seqs": 512,
+    "max_num_batched_tokens": 32768
+  },
+  "hf": {
+    "batch_size": 32
+  },
+  "paths": {
+    "results": "results",
+    "logs": "logs",
+    "cache": "cache"
+  },
   "debate": {
-    "models": ["vllm/q3-4bi", "vllm/l31-8bi"],
+    "models": [
+      "vllm/q3-4bi",
+      "vllm/l31-8bi"
+    ],
     "rounds": 1,
     "share_confidence": false,
     "execution": "exec01"
@@ -30,10 +102,35 @@
   "baselines": {
     "sweep": "sweep01",
     "grid": [
-      {"models": ["vllm/q3-4bi", "vllm/l31-8bi", "vllm/g3-12i", "vllm/phi4mii"],
-       "tasks": ["gsm8k", "math500", "csqa", "boolq"]},
-      {"models": ["vllm/l32-3bi", "vllm/phi4mii"], "tasks": ["prontoqa"]}
+      {
+        "models": [
+          "vllm/q3-4bi",
+          "vllm/l31-8bi",
+          "vllm/g3-12i",
+          "vllm/phi4mii"
+        ],
+        "tasks": [
+          "gsm8k",
+          "math500",
+          "csqa",
+          "boolq"
+        ]
+      },
+      {
+        "models": [
+          "vllm/l32-3bi",
+          "vllm/phi4mii"
+        ],
+        "tasks": [
+          "prontoqa"
+        ]
+      }
     ],
-    "summary_signals": ["seq_response", "verification", "verbalized", "consistency_t0.7"]
+    "summary_signals": [
+      "seq_response",
+      "verification",
+      "verbalized",
+      "consistency_t0.7"
+    ]
   }
 }

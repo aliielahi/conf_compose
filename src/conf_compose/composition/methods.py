@@ -72,7 +72,7 @@ def selection_methods(task, item: Item, streams: Sequence[Stream], budget: Optio
     candidates = candidate_set(task, item, streams)
     if not candidates:
         return {}
-    states = state_space(task, candidates)
+    states = state_space(task, candidates, item.labels)
     supports = {stream.stream_id: support(task, stream, candidates, budget) for stream in streams}
     available = [s for s in streams if supports[s.stream_id].available]
     vectors = {s.stream_id: {c: supports[s.stream_id].categorical(c, len(states), variant) for c in states}

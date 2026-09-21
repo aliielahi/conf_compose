@@ -30,6 +30,7 @@ class Item:
     question: str
     gold: str
     streams: List[Stream]
+    labels: Optional[List[str]] = None
 
     def round_streams(self, rounds: Sequence[int]) -> List[Stream]:
         return [stream for stream in self.streams if stream.round in rounds]
@@ -64,7 +65,8 @@ def from_zero_shot(paths: Dict[str, Path], sample_key: str = "consistency_t0.7")
                                   tokens=len(row.get("token_logprobs", {}).get("response") or []) or None,
                                   signals=dict(row["confidence"])))
         first = next(iter(per_model.values()))[example_id]
-        items.append(Item(example_id, first.get("question", ""), first["gold"], streams))
+        items.append(Item(example_id, first.get("question", ""), first["gold"], streams,
+                          first.get("options")))
     return items
 
 

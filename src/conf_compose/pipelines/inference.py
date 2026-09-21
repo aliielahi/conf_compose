@@ -14,7 +14,7 @@ from conf_compose.constants import RESULTS_DIR, SAMPLING, TASKS
 from conf_compose.utils.llm_calls import LLM
 
 from .runs import split_summary
-from .zero_shot import ZeroShotConfig, run_zero_shot
+from .zero_shot import RECORD_SCHEMA, ZeroShotConfig, run_zero_shot
 
 STORE = RESULTS_DIR / "inferences"
 
@@ -131,7 +131,8 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
         if rows:
             (out_dir / f"{split}.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     (out_dir / "settings.json").write_text(json.dumps(
-        {"settings": settings.to_dict(), "config": config.to_dict(), "execution": llm.execution,
+        {"settings": settings.to_dict(), "record_schema": RECORD_SCHEMA, "config": config.to_dict(),
+         "execution": llm.execution,
          "splits": {split: split_summary(rows) for split, rows in records.items() if rows},
          "timings": timings, "seconds": round(time.time() - start, 1)}, indent=2))
     return out_dir

@@ -12,7 +12,8 @@ OTHER = "__OTHER__"
 EPSILON = 1e-3
 
 # Full known answer space for closed-label tasks; open-answer tasks keep a residual OTHER state instead.
-LABEL_SPACE = {"csqa": ("A", "B", "C", "D", "E"), "boolq": ("true", "false"), "prontoqa": ("true", "false")}
+LABEL_SPACE = {"csqa": ("A", "B", "C", "D", "E"), "boolq": ("true", "false"), "prontoqa": ("true", "false"),
+               "gpqa": ("A", "B", "C", "D")}
 
 
 def label_space(task) -> Optional[Sequence[str]]:
@@ -72,10 +73,10 @@ def candidate_set(task, item: Item, streams: Sequence[Stream]) -> List[str]:
     return candidates
 
 
-def state_space(task, candidates: Sequence[str]) -> List[str]:
-    """Probability states: the full known label set when closed, otherwise the candidates plus OTHER."""
-    labels = label_space(task)
-    return list(labels) if labels else [*candidates, OTHER]
+def state_space(task, candidates: Sequence[str], labels: Optional[Sequence[str]] = None) -> List[str]:
+    """Probability states: this example's own options, else the task's label set, else candidates plus OTHER."""
+    known = labels or label_space(task)
+    return list(known) if known else [*candidates, OTHER]
 
 
 def support_of(task, samples: Sequence[Optional[str]], candidates: Sequence[str]) -> Support:

@@ -11,6 +11,9 @@ from .confidence import ConfidenceConfig, estimate_confidence, _timed
 
 ZeroShotConfig = ConfidenceConfig
 
+# Bump when a record gains or loses a field, so a cell's contents are identifiable after the fact.
+RECORD_SCHEMA = 2
+
 
 def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None,
                   timings: Optional[Dict[str, Dict[str, float]]] = None) -> List[Dict[str, Any]]:
@@ -58,6 +61,8 @@ def _record(task, example, generation, target, prompt: str) -> Dict[str, Any]:
         "id": example.id,
         "question": example.question,
         "prompt": prompt,
+        "options": example.meta.get("options") or sorted(example.meta.get("choices", {})) or None,
+        "choices": example.meta.get("choices") or None,
         "gold": example.answer,
         "prediction": target.answer,
         "correct": task.is_correct(target.answer, example),
