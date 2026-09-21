@@ -67,9 +67,12 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
     for name, in_context in (("verification", False), ("verification_context", True)):
         if not (config.verification if not in_context else config.verification_context):
             continue
+        estimator = SelfVerification(llm, context=in_context)
         with _timed(timings, name, cache):
-            values = SelfVerification(llm, context=in_context).estimate(task, targets)
-        _check_stage(name, values, targets)
+            values = estimator.estimate(task, targets)
+        _check_stage(name, values, targets,
+                     f"top tokens were {getattr(estimator, 'sample_tokens', [])}; a reasoning model may need "
+                     f"CHAT_TEMPLATE_KWARGS to turn thinking off")
         for output, value in zip(outputs, values):
             output.signals[name] = value
 
@@ -97,11 +100,13 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
     return outputs
 
 
-def _check_stage(stage: str, values: Sequence[Optional[float]], targets: Sequence[Target]) -> None:
+def _check_stage(stage: str, values: Sequence[Optional[float]], targets: Sequence[Target],
+                 hint: str = "") -> None:
     """An estimator that returns nothing for every answerable target means the backend failed."""
     answerable = [i for i, target in enumerate(targets) if target.answer is not None]
     if answerable and all(values[i] is None for i in answerable):
-        raise RuntimeError(f"{stage}: no value for any of {len(answerable)} answerable targets; check the backend")
+        raise RuntimeError(f"{stage}: no value for any of {len(answerable)} answerable targets"
+                           + (f"; {hint}" if hint else "; check the backend"))
 
 
 @contextmanager

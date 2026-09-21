@@ -28,8 +28,12 @@ class SelfVerification:
                                         system=self.system) if prompts else []
         values: List[Optional[float]] = [None] * len(targets)
         self.missing_labels = 0
+        self.sample_tokens: List[str] = []
         for i, generation in zip(scored, generations):
-            values[i] = self._probability(generation.top_logprobs[0]) if generation.top_logprobs else None
+            top = generation.top_logprobs[0] if generation.top_logprobs else None
+            values[i] = self._probability(top) if top else None
+            if values[i] is None and top and not self.sample_tokens:
+                self.sample_tokens = sorted(top, key=top.get, reverse=True)[:8]
             self.missing_labels += values[i] is None
         return values
 

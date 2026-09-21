@@ -37,4 +37,11 @@ HF_models = {
     'q25-32bi': 'Qwen/Qwen2.5-32B-Instruct',
     'q3-4bi': 'Qwen/Qwen3-4B-Instruct-2507',
     'q3-8bi': 'Qwen/Qwen3-8B',
+    'q3-14bi': 'Qwen/Qwen3-14B',
+}
+
+# Hybrid reasoning models open with <think>, which breaks any single-token probe; ask for the plain mode.
+CHAT_TEMPLATE_KWARGS = {
+    'q3-8bi': {'enable_thinking': False},
+    'q3-14bi': {'enable_thinking': False},
 }

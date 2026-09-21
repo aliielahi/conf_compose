@@ -1,6 +1,8 @@
 """Fill the shared inference store: generate only the (task, model, decoding) cells that are missing."""
 
 import argparse
+import subprocess
+import sys
 import time
 
 from conf_compose.constants import TASKS
@@ -22,6 +24,8 @@ def parse_args():
     parser.add_argument("--all-signals", action="store_true",
                         help="also in-context verification and the content-free debiased sequence score")
     parser.add_argument("--dry-run", action="store_true", help="list what is missing and exit")
+    parser.add_argument("--in-process", action="store_true",
+                        help="load every model in this process instead of one subprocess each")
     parser.add_argument("--store", default=str(STORE))
     return parser.parse_args()
 
@@ -48,15 +52,40 @@ def main():
     grouped = by_model(pending)
     status = Status(f"inference {'+'.join(args.tasks)}", total=len(pending))
     for index, (model, group) in enumerate(grouped.items(), 1):
-        status.stage(f"loading {model} ({index}/{len(grouped)} models)")
+        status.stage(f"{model} ({index}/{len(grouped)} models, {len(group)} cell(s))")
         start = time.time()
-        llm = load_model(model)
-        status.stage(f"{model} ready in {time.time() - start:.0f}s, {len(group)} cell(s)")
-        for settings in group:
-            began = time.time()
-            path = ensure_inference(settings, llm, get_task(settings.task), args.store)
-            status.step(f"{path.name} | {time.time() - began:.0f}s")
+        if args.in_process or len(grouped) == 1:
+            run_one_model(model, group, args, status)
+        else:
+            _spawn(model, args)
+            status.step(f"{model} finished | {time.time() - start:.0f}s", done=len(group))
     status.finish(f"all {len(wanted)} cell(s) present, {len(missing(wanted, args.store))} missing")
+
+
+def run_one_model(model, group, args, status):
+    """Every cell this model owes, on one loaded engine; the process exits to free the GPU."""
+    start = time.time()
+    llm = load_model(model)
+    status.stage(f"{model} ready in {time.time() - start:.0f}s")
+    for settings in group:
+        began = time.time()
+        path = ensure_inference(settings, llm, get_task(settings.task), args.store)
+        status.step(f"{path.name} | {time.time() - began:.0f}s")
+
+
+def _spawn(model, args):
+    """One model per subprocess: the engine's GPU memory is released when the child exits."""
+    command = [sys.executable, __file__, "--tasks", *args.tasks, "--models", model,
+               "--voters", str(args.voters), "--answer-temperature", str(args.answer_temperature),
+               "--store", args.store, "--in-process"]
+    for flag, value in (("--n-val", args.n_val), ("--n-test", args.n_test)):
+        if value is not None:
+            command += [flag, str(value)]
+    command += ["--no-verbalized"] if args.no_verbalized else []
+    command += ["--all-signals"] if args.all_signals else []
+    result = subprocess.run(command)
+    if result.returncode != 0:
+        raise SystemExit(f"{model} failed with exit code {result.returncode}")
 
 
 if __name__ == "__main__":

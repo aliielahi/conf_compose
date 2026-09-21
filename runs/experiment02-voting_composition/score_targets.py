@@ -8,7 +8,8 @@ from conf_compose.composition import shared_targets, voter_rows
 from conf_compose.confidence_estimators import SelfVerification, Target
 from conf_compose.constants import TASKS
 from conf_compose.data import Example, get_task
-from conf_compose.pipelines.inference import STORE, inference_dir, load_model, voter_settings
+from conf_compose.pipelines.inference import (STORE, inference_dir, load_model, split_count,
+                                              voter_settings)
 
 MODELS = ("vllm/q3-4bi", "vllm/l31-8bi", "vllm/g3-12i", "vllm/phi4mii")
 
@@ -20,13 +21,19 @@ def parse_args():
     parser.add_argument("--voters", type=int, default=5)
     parser.add_argument("--splits", nargs="+", default=["validation", "test"])
     parser.add_argument("--targets", nargs="+", default=["anchor", "majority"], choices=["anchor", "majority"])
+    parser.add_argument("--n-val", type=split_count, help="must match the inference sweep")
+    parser.add_argument("--n-test", type=split_count, help="must match the inference sweep")
+    parser.add_argument("--all-signals", action="store_true", help="must match the inference sweep")
+    parser.add_argument("--no-verbalized", action="store_true", help="must match the inference sweep")
     parser.add_argument("--store", default=str(STORE))
     return parser.parse_args()
 
 
 def panel_paths(args, split):
     return [str(inference_dir(s, args.store) / f"{split}.jsonl")
-            for s in voter_settings(args.task, args.models, args.voters, verbalized=False)]
+            for s in voter_settings(args.task, args.models, args.voters, verbalized=not args.no_verbalized,
+                                    n_val=args.n_val, n_test=args.n_test,
+                                    verification_context=args.all_signals, debias=args.all_signals)]
 
 
 def main():

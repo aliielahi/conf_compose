@@ -12,7 +12,7 @@ from conf_compose.composition import (FAMILIES, GridConfig, attach_target_scores
 from conf_compose.constants import RESULTS_DIR
 from conf_compose.data import get_task
 from conf_compose.pipelines.inference import (STORE, by_model, describe, ensure_inference, inference_dir,
-                                              load_model, missing, voter_settings)
+                                              load_model, missing, split_count, voter_settings)
 from conf_compose.pipelines.progress import Status
 from conf_compose.pipelines.runs import source_hash
 
@@ -33,6 +33,12 @@ def parse_args():
     parser.add_argument("--sizes", type=int, nargs="+", default=[2, 3, 4, 5])
     parser.add_argument("--samples", type=int, nargs="+", default=[1, 2, 3, 4, 5])
     parser.add_argument("--cap", type=int, default=5)
+    parser.add_argument("--n-val", type=split_count, help="must match the inference sweep: a count, all, none")
+    parser.add_argument("--n-test", type=split_count, help="must match the inference sweep")
+    parser.add_argument("--all-signals", action="store_true", help="must match the inference sweep")
+    parser.add_argument("--no-verbalized", action="store_true", help="must match the inference sweep")
+    parser.add_argument("--holdout", type=float, default=0.3,
+                        help="fraction of test used for selection when no validation split was generated")
     parser.add_argument("--n-boot", type=int, default=2000)
     parser.add_argument("--local-only", action="store_true", help="fail instead of loading a model")
     parser.add_argument("--store", default=str(STORE))
@@ -41,8 +47,11 @@ def parse_args():
 
 
 def needed(args):
+    """Exactly the settings the inference sweep wrote, so an existing store is never regenerated."""
     return [s for task in args.tasks
-            for s in voter_settings(task, args.models, args.voters, verbalized=False)]
+            for s in voter_settings(task, args.models, args.voters, verbalized=not args.no_verbalized,
+                                    n_val=args.n_val, n_test=args.n_test,
+                                    verification_context=args.all_signals, debias=args.all_signals)]
 
 
 def ensure_all(args):
@@ -63,15 +72,33 @@ def ensure_all(args):
 
 
 def split_paths(task, args, split):
-    return {inference_dir(s, args.store).name: inference_dir(s, args.store) / f"{split}.jsonl"
-            for s in voter_settings(task, args.models, args.voters, verbalized=False)}
+    paths = {inference_dir(s, args.store).name: inference_dir(s, args.store) / f"{split}.jsonl"
+             for s in needed_for(task, args)}
+    return {name: path for name, path in paths.items() if path.exists()}
+
+
+def needed_for(task, args):
+    return [s for s in needed(args) if s.task == task]
+
+
+def load_splits(task_name, args):
+    """Validation and test items; when the sweep generated no validation, hold out part of test instead."""
+    test = from_zero_shot(split_paths(task_name, args, "test"))
+    validation_paths = split_paths(task_name, args, "validation")
+    if validation_paths:
+        return from_zero_shot(validation_paths), test, False
+    cut = int(len(test) * args.holdout)
+    ordered = sorted(test, key=lambda item: hashlib.sha256(item.example_id.encode()).hexdigest())
+    return ordered[:cut], ordered[cut:], True
 
 
 def run_cell(task_name, target, args):
     task = get_task(task_name)
     config = GridConfig(target, args.sizes, args.samples, args.families, "add_half", args.cap)
-    validation = from_zero_shot(split_paths(task_name, args, "validation"))
-    test = from_zero_shot(split_paths(task_name, args, "test"))
+    validation, test, carved = load_splits(task_name, args)
+    if carved:
+        print(f"  no validation split generated: holding out {len(validation)} of "
+              f"{len(validation) + len(test)} test examples for selection and calibration")
     scores = sorted(Path(args.store, task_name).glob("target_verification_*.json"))
     if scores:
         print(f"  target scores: {attach_target_scores(validation, [str(p) for p in scores if 'validation' in p.name], target)}"
@@ -95,8 +122,8 @@ def run_cell(task_name, target, args):
         {r.method: {"ids": r.example_ids, "scores": r.scores, "correct": r.correct} for r in test_rows}))
     (out_dir / "manifest.json").write_text(json.dumps(
         {"experiment": NAME, "args": vars(args), "task": task_name, "target": target, "models": models,
-         "inferences": sorted(split_paths(task_name, args, "test")), "code": source_hash("conf_compose.composition")},
-        indent=2))
+         "inferences": sorted(split_paths(task_name, args, "test")), "holdout_from_test": carved,
+         "code": source_hash("conf_compose.composition")}, indent=2))
     print(f"  saved {out_dir}", flush=True)
     return report, val_report
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any, Dict, List, Optional
 
 from .core import Generation
@@ -29,6 +30,11 @@ class VLLMLocal(LocalLLM):
         self.engine = Engine(**options, **(engine_kwargs or {}))
         self.tokenizer = self.engine.get_tokenizer()
 
+    @property
+    def _engine_bars(self) -> bool:
+        """The engine's own bars are for a terminal; a redirected run gets percentage lines instead."""
+        return bool(self.progress and sys.stderr.isatty())
+
     def _generate_texts(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:
         from vllm import SamplingParams
 
@@ -49,7 +55,7 @@ class VLLMLocal(LocalLLM):
         options.update(params)
 
         prompts = [{"prompt_token_ids": ids} for ids in self.encode(texts)["input_ids"]]
-        outputs = self.engine.generate(prompts, SamplingParams(**options), use_tqdm=self.progress)
+        outputs = self.engine.generate(prompts, SamplingParams(**options), use_tqdm=self._engine_bars)
 
         groups = []
         for output in outputs:
@@ -64,7 +70,7 @@ class VLLMLocal(LocalLLM):
         token_ids, lengths = self.continuation_ids(contexts, continuations)
         prompts = [{"prompt_token_ids": ids} for ids in token_ids]
         outputs = self.engine.generate(prompts, SamplingParams(max_tokens=1, prompt_logprobs=1),
-                                       use_tqdm=self.progress)
+                                       use_tqdm=self._engine_bars)
         scores = []
         for output, ids, length in zip(outputs, token_ids, lengths):
             positions = range(len(ids) - length, len(ids))

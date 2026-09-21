@@ -12,9 +12,11 @@ from .hf_models import HF_models
 
 
 class LocalLLM(BaseLLM):
-    def __init__(self, model: str, *, apply_chat_template: bool = True, **kwargs: Any):
+    def __init__(self, model: str, *, apply_chat_template: bool = True,
+                 chat_template_kwargs: Optional[Dict[str, Any]] = None, **kwargs: Any):
         super().__init__(HF_models.get(model, model), **kwargs)
         self.apply_chat_template = apply_chat_template
+        self.chat_template_kwargs = dict(chat_template_kwargs or {})
         self.tokenizer: Any = None
 
     def render(self, system: Optional[str], messages: Conversation) -> str:
@@ -23,7 +25,13 @@ class LocalLLM(BaseLLM):
                 raise ValueError("system prompts and multi-turn input require apply_chat_template=True")
             return messages[0]["content"]
         chat = ([{"role": "system", "content": system}] if system else []) + messages
-        return self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        try:
+            return self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True,
+                                                      **self.chat_template_kwargs)
+        except TypeError:
+            self._warn_once("chat_template_kwargs",
+                            f"{self.model}: template ignores {sorted(self.chat_template_kwargs)}")
+            return self.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
 
     def encode(self, texts: Sequence[str], **kwargs: Any):
         return self.tokenizer(list(texts), add_special_tokens=not self.apply_chat_template, **kwargs)

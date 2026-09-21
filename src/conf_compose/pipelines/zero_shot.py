@@ -23,8 +23,9 @@ def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None
                                        temperature=config.answer_temperature, logprobs=True)
 
     targets = zero_shot_targets(task, examples, generations)
-    records = [_record(task, example, generation, target)
-               for example, generation, target in zip(examples, generations, targets, strict=True)]
+    records = [_record(task, example, generation, target, prompt)
+               for example, generation, target, prompt in zip(examples, generations, targets, prompts,
+                                                              strict=True)]
     for record, output in zip(records, estimate_confidence(llm, task, targets, config, timings)):
         record["confidence"] = output.signals
         record.update(output.details)
@@ -51,10 +52,12 @@ def signal(records: Sequence[Dict[str, Any]], name: str, missing: float = 0.0) -
     return [missing if record["confidence"][name] is None else record["confidence"][name] for record in records]
 
 
-def _record(task, example, generation, target) -> Dict[str, Any]:
+def _record(task, example, generation, target, prompt: str) -> Dict[str, Any]:
     answer = task.extract_answer(generation.text)
     return {
         "id": example.id,
+        "question": example.question,
+        "prompt": prompt,
         "gold": example.answer,
         "prediction": target.answer,
         "correct": task.is_correct(target.answer, example),
