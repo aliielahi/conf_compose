@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import re
+import string
 from typing import Any, Dict, List, Optional, Sequence
 
 from conf_compose.prompts import MultipleChoiceReasoning
@@ -51,7 +52,7 @@ class TruthfulQA(MultipleChoiceTask):
     hf_path = "truthfulqa/truthful_qa"
     hf_config = "multiple_choice"
     hf_splits = {"validation": "validation", "test": "validation"}
-    letters = "ABCDEFGHIJKL"
+    letters = string.ascii_uppercase
 
     def to_example(self, row: Dict[str, Any], default_id: str) -> Example:
         targets = row["mc1_targets"]
@@ -76,6 +77,8 @@ class GPQADiamond(MultipleChoiceTask):
 def _choice_example(letters: str, example_id: str, question: str, choices: Sequence[str],
                     correct: int) -> Example:
     """Options are shuffled deterministically per example, since the source lists the answer first."""
+    if len(choices) > len(letters):
+        raise ValueError(f"{example_id}: {len(choices)} options but only {len(letters)} letters available")
     order = list(range(len(choices)))
     random.Random(example_id).shuffle(order)
     used = letters[:len(choices)]

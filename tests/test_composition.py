@@ -144,3 +144,10 @@ def test_choice_options_are_shuffled_off_the_first_position():
     golds = {_choice_example("ABCD", f"q-{i}", "why?", ["right", "w1", "w2", "w3"], 0).answer
              for i in range(25)}
     assert len(golds) > 1
+
+
+def test_choice_example_refuses_to_silently_drop_options():
+    """More options than letters must fail loudly, not truncate the question."""
+    from conf_compose.data.multiple_choice import _choice_example
+    with pytest.raises(ValueError):
+        _choice_example("ABC", "q-0", "why?", ["a", "b", "c", "d"], 0)
