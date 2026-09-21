@@ -27,6 +27,13 @@ def load(root: Path):
     return runs
 
 
+def arm(row):
+    """The three arms: one run's samples split, several runs of one model, several distinct models."""
+    if row.get("kind") == "split":
+        return "split"
+    return "homo" if row.get("distinct_models", 0) <= 1 else "hetero"
+
+
 def rows_of(report, rule=None):
     return {name: row for name, row in report.items()
             if row.get("rule") and (rule is None or row["rule"] == rule)}
@@ -36,7 +43,7 @@ def size_curve(report, metric, rule):
     """Metric against panel size, holding samples per stream fixed, for each family and model set."""
     grid = defaultdict(dict)
     for name, row in rows_of(report, rule).items():
-        key = (row["kind"], "+".join(_short(f) for f in row["families"]), row["samples_per_stream"])
+        key = (arm(row), "+".join(_short(f) for f in row["families"]), row["samples_per_stream"])
         size = row["models"] * row["streams_per_model"]
         grid[key].setdefault(size, []).append(row.get(metric))
     return grid
@@ -48,7 +55,7 @@ def matched_budget(report, metric, rule):
     for name, row in rows_of(report, rule).items():
         if row["families"] != ["consistency"] or row.get(metric) is None:
             continue
-        grid[row["sample_calls"]][row["kind"]].append(row[metric])
+        grid[row["sample_calls"]][arm(row)].append(row[metric])
     return grid
 
 
@@ -98,36 +105,36 @@ def main():
               + "".join(f"{'S=' + str(s):>9}" for s in (2, 3, 4, 5)), lines)
 
         budget = matched_budget(report, args.metric, args.rule)
-        lines = [f"{calls:<10}{_mean(kinds.get('voters')):>10}{_mean(kinds.get('split')):>10}"
-                 for calls, kinds in sorted(budget.items())]
+        lines = [f"{calls:<10}{_mean(kinds.get('hetero')):>10}{_mean(kinds.get('homo')):>10}"
+                 f"{_mean(kinds.get('split')):>10}" for calls, kinds in sorted(budget.items())]
         table("consistency only, matched sampled generations",
-              f"{'samples':<10}{'voters':>10}{'split':>10}", lines)
+              f"{'samples':<10}{'hetero':>10}{'homo':>10}{'split':>10}", lines)
 
         lines = []
         for family in FAMILY_ORDER:
             matches = [row for row in rows_of(report, args.rule).values()
-                       if "+".join(_short(f) for f in row["families"]) == family and row.get("kind") == "voters"]
+                       if "+".join(_short(f) for f in row["families"]) == family and arm(row) == "hetero"]
             values = [row.get(args.metric) for row in matches if row.get(args.metric) is not None]
             if not values:
                 continue
-            name, selected = pick(report, validation, lambda r, f=family: r.get("kind") == "voters"
+            name, selected = pick(report, validation, lambda r, f=family: arm(r) == "hetero"
                                   and "+".join(_short(x) for x in r["families"]) == f and r["rule"] == args.rule,
                                   args.metric)
             lines.append(f"{family:<16}{len(values):>5}{_cell(selected):>10}"
                          f"{sum(values) / len(values):>9.3f}  {_panel_of(name):<30}")
-        table("estimator family, voter panels (panel chosen on validation)",
+        table("estimator family, distinct-model panels (chosen on validation)",
               f"{'family':<16}{'n':>5}{'val-sel':>10}{'mean':>9}  {'panel':<30}", lines)
 
         lines = []
         for rule in ("mean", "logodds_sum", "logodds_mean"):
-            rows = [row for row in rows_of(report, rule).values() if row.get("kind") == "voters"]
+            rows = [row for row in rows_of(report, rule).values() if arm(row) == "hetero"]
             nlls = [row.get("nll") for row in rows if row.get("nll") is not None]
             name, auroc_value = pick(report, validation,
-                                     lambda r, u=rule: r.get("kind") == "voters" and r["rule"] == u, "auroc")
+                                     lambda r, u=rule: arm(r) == "hetero" and r["rule"] == u, "auroc")
             nll_value = report.get(name, {}).get("nll") if name else None
             lines.append(f"{rule:<16}{len(rows):>5}{_cell(auroc_value):>12}{_cell(nll_value):>10}"
                          f"{_mean(nlls):>10}")
-        table("pooling rule, voter panels (panel chosen on validation)",
+        table("pooling rule, distinct-model panels (chosen on validation)",
               f"{'rule':<16}{'n':>5}{'val auroc':>12}{'val nll':>10}{'mean nll':>10}", lines)
 
 

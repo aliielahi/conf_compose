@@ -30,42 +30,74 @@ def parse_args():
     parser.add_argument("--families", nargs="+", default=list(FAMILIES), choices=list(FAMILIES))
     parser.add_argument("--target-scores", nargs="*", default=[],
                         help="target_verification_<model>_<split>.json files from runs/composition/score_targets.py")
+    parser.add_argument("--cap", type=int, default=5, help="max panels per (size, family, budget) and arm")
     parser.add_argument("--variant", choices=["add_half", "epsilon"], default="add_half")
     parser.add_argument("--n-boot", type=int, default=500)
     parser.add_argument("--out-dir", default=str(RESULTS_DIR / "composition"))
     return parser.parse_args()
 
 
-def voter_subsets(models, size):
-    """Subsets of separately generated runs; past the distinct-model count, add one rotating repeat."""
+def group_runs(models):
+    """The separately generated runs of each base model, in voter order."""
     bases = {}
     for model in models:
         bases.setdefault(base_model(model), []).append(model)
-    if size <= len(bases):
-        return [subset for subset in itertools.combinations(models, size)
-                if len({base_model(model) for model in subset}) == size]
-    if size - len(bases) > 1:
-        return []
-    one_each = [runs[0] for runs in bases.values()]
-    return [tuple(one_each + [runs[1]]) for runs in bases.values() if len(runs) > 1]
+    return {base: sorted(runs) for base, runs in bases.items()}
+
+
+def hetero_subsets(models, size, cap):
+    """Panels of `size` distinct models, one run each; voter assignments rotate and are capped."""
+    bases = group_runs(models)
+    out = []
+    for chosen in itertools.combinations(sorted(bases), min(size, len(bases))):
+        if len(chosen) < min(size, len(bases)):
+            continue
+        depth = min(cap, max(len(bases[base]) for base in chosen))
+        for shift in range(depth):
+            subset = [bases[base][(shift + i) % len(bases[base])] for i, base in enumerate(chosen)]
+            if size > len(chosen):
+                extra = bases[chosen[shift % len(chosen)]]
+                if len(extra) < 2:
+                    continue
+                subset.append(extra[(shift + 1) % len(extra)])
+            if len(subset) == size and len(set(subset)) == size:
+                out.append(tuple(subset))
+    return out
+
+
+def homo_subsets(models, size, cap):
+    """Panels of `size` separate runs of one model: the arm the voter sweep was generated for."""
+    out = []
+    for base, runs in sorted(group_runs(models).items()):
+        if len(runs) < size:
+            continue
+        for subset in list(itertools.combinations(runs, size))[:cap]:
+            out.append(tuple(subset))
+    return out
 
 
 def build_panels(models, args):
-    """Voter panels of separately generated runs against same-run sample splits, at matched samples."""
+    """Same-model voter panels against distinct-model panels, plus the same-run sample split control."""
     panels = []
     for family in args.families:
         names = FAMILIES[family]
         for size in args.sizes:
             for per_stream in args.samples:
-                for subset in voter_subsets(models, size):
-                    tag = "+".join(_short(model) for model in subset)
+                for subset in hetero_subsets(models, size, args.cap):
                     panels.append(Panel(subset, 1, per_stream, names,
-                                        label=f"voters[{tag}]_s{size}_k{per_stream}_{family}"))
+                                        label=f"hetero[{_tag(subset)}]_s{size}_k{per_stream}_{family}"))
+                for subset in homo_subsets(models, size, args.cap):
+                    panels.append(Panel(subset, 1, per_stream, names,
+                                        label=f"homo[{_tag(subset)}]_s{size}_k{per_stream}_{family}"))
                 if "consistency" in names:
-                    for model in models:
+                    for model in models[:args.cap]:
                         panels.append(Panel((model,), size, per_stream, names,
                                             label=f"split[{_short(model)}]_s{size}_k{per_stream}_{family}"))
     return panels
+
+
+def _tag(subset):
+    return "+".join(_short(model) for model in subset)
 
 
 def _short(name: str) -> str:
@@ -75,21 +107,26 @@ def _short(name: str) -> str:
     return f"{model}:{rest}" if rest else model
 
 
+def model_key(name):
+    """One key for a model however it is written: a cli spec, a run directory, or a voter repeat of either."""
+    name = name.replace("/", "__").split("_val")[0]
+    return base_model(name)
+
+
 def attach_target_scores(items, paths, mode):
     """Give each stream its verifier's rating of the shared target, keyed by the model that produced it."""
     by_model = {}
     for path in paths:
         payload = json.loads(Path(path).read_text())
-        by_model[payload["model"]] = payload["scores"]
+        by_model[model_key(payload["model"])] = payload["scores"]
     attached = 0
     for item in items:
         for stream in item.streams:
-            for model, scores in by_model.items():
-                if _short(model).split(":")[0] in _short(stream.model):
-                    entry = scores.get(item.example_id, {}).get(mode)
-                    if entry:
-                        stream.signals["verification_target"] = entry["verification"]
-                        attached += 1
+            scores = by_model.get(model_key(stream.model))
+            entry = scores.get(item.example_id, {}).get(mode) if scores else None
+            if entry and entry.get("verification") is not None:
+                stream.signals["verification_target"] = entry["verification"]
+                attached += 1
     return attached
 
 
@@ -109,7 +146,9 @@ def collect(task, items, panels, args):
                       "families": list(p.families), "sample_calls": p.sample_calls,
                       "answer_calls": p.answer_calls, "signal_calls": p.signal_calls} for p in panels}
     full = _full_panel(items)
-    for item in items:
+    for done, item in enumerate(items, 1):
+        if done % 100 == 0:
+            print(f"  scored {done}/{len(items)} examples", flush=True)
         streams = item.round_streams((0,))
         target = target_of(task, item, args.target)
         if target is None:
@@ -173,8 +212,10 @@ def main():
 
     intercepts = fit_intercepts(val_rows)
     test_rows = rows_from(test_predictions, len(test), test_specs)
+    print(f"evaluating {len(test_rows)} rows with n_boot={args.n_boot}", flush=True)
     report = evaluate(test_rows, reference, args.n_boot, intercepts)
-    print("\n".join(format_table(report, reference)))
+    top = sorted(report, key=lambda m: -(report[m].get("auroc") or 0))[:15]
+    print("\n".join(format_table({m: report[m] for m in top}, reference)))
 
     out_dir = Path(args.out_dir) / args.task / f"panels_{args.target}_{_run_id(args)}"
     out_dir.mkdir(parents=True, exist_ok=True)
