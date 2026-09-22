@@ -49,7 +49,7 @@ def main():
         if responses < 5:
             problems.append(f"{path.parent.name}: only {responses} saved resample reasoning(s)")
         for row in rows:
-            by_model[base_model(path.parent.name)].setdefault(row["id"], []).append(row["prediction"])
+            by_model[_panel(path.parent.name)].setdefault(row["id"], []).append(row["prediction"])
 
     print(f"\n{'model':<28}{'voters':>7}{'all agree':>11}{'identical pairs':>17}")
     for model, answers in sorted(by_model.items()):
@@ -63,6 +63,12 @@ def main():
             problems.append(f"{model}: {identical} voter pair(s) produced identical answers on every example")
 
     print("\n" + ("\n".join(f"PROBLEM  {p}" for p in problems) if problems else "no problems found"))
+
+
+def _panel(cell: str) -> str:
+    """Voters are comparable only within one model at one split size; a smaller cell is a different panel."""
+    size = next((part for part in cell.split("--")[1].split("_") if part.startswith("n") or part == "full"), "")
+    return f"{base_model(cell)} [{size}]"
 
 
 def _identical_voter_pairs(shared, voters):

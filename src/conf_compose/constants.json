@@ -24,7 +24,7 @@
     },
     "csqa": {
       "word_limit": 100,
-      "max_tokens": 512,
+      "max_tokens": 768,
       "val_pool_size": 1000,
       "n_val": 200,
       "n_test": 500
@@ -45,7 +45,7 @@
     },
     "truthfulqa": {
       "word_limit": 100,
-      "max_tokens": 512,
+      "max_tokens": 768,
       "val_pool_size": 200,
       "n_val": 150,
       "n_test": 500
