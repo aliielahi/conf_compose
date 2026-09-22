@@ -32,7 +32,9 @@ class VLLMLocal(LocalLLM):
 
     @property
     def _engine_bars(self) -> bool:
-        """The engine's own bars are for a terminal; a redirected run gets percentage lines instead."""
+        """The engine's own bars are for a terminal; CONF_COMPOSE_ENGINE_BARS=1 forces them into a log."""
+        if os.environ.get("CONF_COMPOSE_ENGINE_BARS") == "1":
+            return bool(self.progress)
         return bool(self.progress and sys.stderr.isatty())
 
     def _generate_texts(self, texts: List[str], params: Dict[str, Any], copies: int) -> List[List[Generation]]:

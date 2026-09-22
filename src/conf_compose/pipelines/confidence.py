@@ -112,9 +112,13 @@ def _check_stage(stage: str, values: Sequence[Optional[float]], targets: Sequenc
 
 @contextmanager
 def _timed(timings: Dict[str, Dict[str, float]], stage: str, cache=None):
+    """Each estimator announces itself, so a long cell shows movement instead of going silent."""
     start = time.time()
     hits, misses = (cache.hits, cache.misses) if cache else (0, 0)
+    print(f"    - {stage} ...", flush=True)
     yield
-    timings[stage] = {"seconds": time.time() - start,
-                      "cache_hits": (cache.hits - hits) if cache else 0,
+    cached = (cache.hits - hits) if cache else 0
+    print(f"    - {stage} done in {time.time() - start:.0f}s"
+          + (f" ({cached} cached)" if cached else ""), flush=True)
+    timings[stage] = {"seconds": time.time() - start, "cache_hits": cached,
                       "cache_misses": (cache.misses - misses) if cache else 0}

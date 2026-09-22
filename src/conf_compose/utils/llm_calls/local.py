@@ -97,6 +97,9 @@ class LocalLLM(BaseLLM):
             return out
 
         copies = max(len(item[1]) for item in pending)
+        print(f"      {self.provider}/{self.model}: {len(pending)} prompt(s) x {copies}"
+              + (f", {len(conversations) - len(pending)} cached" if len(pending) < len(conversations) else ""),
+              flush=True)
         try:
             groups = await asyncio.to_thread(self._generate_texts, [item[3] for item in pending], params, copies)
         except Exception as exc:
