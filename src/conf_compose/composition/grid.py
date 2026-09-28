@@ -17,8 +17,10 @@ from .evidence import Item
 from .methods import Prediction, majority_answer, pool_methods
 from .panels import Panel, available, base_model, sources
 
-FAMILIES = {"cons": ("consistency",), "ver": ("verification",), "cons+ver": ("consistency", "verification"),
+FAMILIES = {"cons": ("consistency",), "ver": ("verification",), "verb": ("verbalized",), "seq": ("seq",),
+            "cons+ver": ("consistency", "verification"),
             "cons+ver+verb": ("consistency", "verification", "verbalized"),
+            "cons+ver+verb+seq": ("consistency", "verification", "verbalized", "seq"),
             "vertgt": ("ver_target",), "cons+vertgt": ("consistency", "ver_target")}
 RULES = ("mean", "logodds_sum", "logodds_mean")
 

@@ -2,6 +2,7 @@
 # Fill the inference store for one or more datasets: 7 models x 5 sampled voters, whole test split, no validation.
 # Several tasks in one call load each model once instead of once per task.
 # Usage: bash runs/inference/sweep_full.sh gpqa truthfulqa       DRY_RUN=1 lists what is missing and exits.
+# RETRY=2048 regenerates only the rows that hit the old ceiling, reusing everything else from cache.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -12,8 +13,9 @@ fi
 TASKS="$*"
 MODELS=${MODELS:-"vllm/q3-4bi vllm/q3-8bi vllm/l32-3bi vllm/l31-8bi vllm/g2-9i vllm/g3-12i vllm/phi4mii"}
 VOTERS=${VOTERS:-5}
-NAME=inference-$(echo "$TASKS" | tr ' ' '+')
+NAME=inference-$(echo "$TASKS" | tr ' ' '+')${RETRY:+-r$RETRY}
 FLAGS="--answer-temperature 0.7 --voters $VOTERS --n-val none --n-test all --all-signals"
+[ -n "${RETRY:-}" ] && FLAGS="$FLAGS --retry-max-tokens $RETRY"
 mkdir -p "logs/$NAME"
 
 if [ -n "${DRY_RUN:-}" ]; then

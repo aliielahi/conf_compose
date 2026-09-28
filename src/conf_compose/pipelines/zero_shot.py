@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 from typing import Any, Dict, List, Optional, Sequence
 
 from conf_compose.confidence_estimators import zero_shot_targets
@@ -12,7 +13,7 @@ from .confidence import ConfidenceConfig, estimate_confidence, _timed
 ZeroShotConfig = ConfidenceConfig
 
 # Bump when a record gains or loses a field, so a cell's contents are identifiable after the fact.
-RECORD_SCHEMA = 2
+RECORD_SCHEMA = 3
 
 
 def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None,
@@ -32,6 +33,24 @@ def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None
     for record, output in zip(records, estimate_confidence(llm, task, targets, config, timings)):
         record["confidence"] = output.signals
         record.update(output.details)
+        record["token_budget"] = config.max_tokens
+    return records
+
+
+def retry_truncated(llm, task, examples, records, config: ConfidenceConfig, max_tokens: int,
+                    timings: Optional[Dict[str, Dict[str, float]]] = None) -> List[Dict[str, Any]]:
+    """Regenerate only the rows that hit the ceiling, at a larger budget, signals and resamples included."""
+    indices = [i for i, record in enumerate(records) if record["finish_reason"] == "length"]
+    print(f"    retry: {len(indices)}/{len(records)} row(s) truncated, regenerating at {max_tokens} tokens",
+          flush=True)
+    if not indices:
+        return records
+    redone = run_zero_shot(llm, task, [examples[i] for i in indices],
+                           replace(config, max_tokens=max_tokens), timings)
+    for index, record in zip(indices, redone):
+        records[index] = record
+    still = sum(record["finish_reason"] == "length" for record in records)
+    print(f"    retry: {still}/{len(records)} still truncated ({100 * still / len(records):.1f}%)", flush=True)
     return records
 
 

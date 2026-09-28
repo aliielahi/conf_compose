@@ -14,7 +14,7 @@ from conf_compose.constants import RESULTS_DIR, SAMPLING, TASKS
 from conf_compose.utils.llm_calls import LLM
 
 from .runs import split_summary
-from .zero_shot import RECORD_SCHEMA, ZeroShotConfig, run_zero_shot
+from .zero_shot import RECORD_SCHEMA, ZeroShotConfig, retry_truncated, run_zero_shot
 
 STORE = RESULTS_DIR / "inferences"
 
@@ -54,6 +54,7 @@ class InferenceSettings:
     verification: bool = True
     verification_context: bool = False
     debias: bool = False
+    retry_max_tokens: Optional[int] = None
 
     def filled(self) -> "InferenceSettings":
         """Task defaults applied; None means the default size and 0 means the whole split, unsampled."""
@@ -75,11 +76,15 @@ class InferenceSettings:
 
     @property
     def tag(self) -> str:
-        return f"{self.model.replace('/', '__')}--{self.decoding}_k{self.consistency_samples}_{self.size}"
+        retry = f"_r{self.retry_max_tokens}" if self.retry_max_tokens else ""
+        return (f"{self.model.replace('/', '__')}--{self.decoding}"
+                f"_k{self.consistency_samples}_{self.size}{retry}")
 
     @property
     def digest(self) -> str:
-        return hashlib.sha256(json.dumps(asdict(self.filled()), sort_keys=True).encode()).hexdigest()[:8]
+        """Unset options are omitted, so adding one never changes an existing cell's identity."""
+        payload = {key: value for key, value in asdict(self.filled()).items() if value is not None}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:8]
 
     def to_dict(self) -> Dict[str, Any]:
         return {**asdict(self.filled()), "digest": self.digest}
@@ -123,7 +128,10 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
     test = [] if settings.n_test == 0 else task.load("test", n=_count(settings.n_test))
 
     start, timings = time.time(), {}
-    combined = run_zero_shot(llm, task, validation + test, config, timings)
+    examples = validation + test
+    combined = run_zero_shot(llm, task, examples, config, timings)
+    if settings.retry_max_tokens:
+        combined = retry_truncated(llm, task, examples, combined, config, settings.retry_max_tokens, timings)
     records = {"validation": combined[:len(validation)], "test": combined[len(validation):]}
 
     out_dir.mkdir(parents=True, exist_ok=True)

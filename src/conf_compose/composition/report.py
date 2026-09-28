@@ -7,7 +7,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-FAMILY_ORDER = ["cons", "ver", "vertgt", "cons+ver", "cons+vertgt", "cons+ver+verb"]
+FAMILY_ORDER = ["cons", "ver", "verb", "seq", "vertgt", "cons+ver", "cons+vertgt", "cons+ver+verb",
+                "cons+ver+verb+seq"]
+RULE_ORDER = ["mean", "logodds_sum", "logodds_mean"]
+MATRIX_METRICS = ["coverage", "accuracy", "auroc", "auarc", "ece", "brier", "nll"]
 SHORT = {"consistency": "cons", "verification": "ver", "verbalized": "verb", "seq": "seq",
          "ver_target": "vertgt"}
 
@@ -119,7 +122,48 @@ def format_cell(report: Dict[str, Any], validation: Dict[str, Any], metric: str,
         rows.append(f"{name:<16}{len(pooled):>5}{_cell(auroc_value):>12}{_cell(nll_value):>10}{_mean(nlls):>10}")
     lines += _table("pooling rule, distinct-model panels (chosen on validation)",
                     f"{'rule':<16}{'n':>5}{'val auroc':>12}{'val nll':>10}{'mean nll':>10}", rows)
+    lines += family_matrix(report)
+    lines += single_matrix(report)
     return lines
+
+
+def single_matrix(report: Dict[str, Any], metrics: Sequence[str] = MATRIX_METRICS) -> List[str]:
+    """One row per individual source rating the shared target: the baseline each panel must beat."""
+    rows = []
+    for name, row in sorted(report.items()):
+        if not name.startswith("single|") or row.get("auroc") is None:
+            continue
+        rows.append((row["auroc"], f"{name.split('|')[1][:27]:<28}"
+                     + "".join(f"{_cell(row.get(m)):>8}" for m in metrics)))
+    header = f"{'source':<28}" + "".join(f"{m[:7]:>8}" for m in metrics)
+    return _table("individual sources on the shared target (baselines)", header,
+                  [line for _, line in sorted(rows, reverse=True)])
+
+
+def family_matrix(report: Dict[str, Any], metrics: Sequence[str] = MATRIX_METRICS,
+                  arms: Sequence[str] = ("hetero",)) -> List[str]:
+    """Every estimator family x panel size x pooling rule, averaged over the panels of that shape."""
+    cells: Dict[tuple, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for row in pooled_rows(report).values():
+        if arm(row) not in arms or row.get("rule") not in RULE_ORDER:
+            continue
+        key = (family_of(row), row["models"] * row["streams_per_model"], row["rule"])
+        for metric in metrics:
+            if row.get(metric) is not None:
+                cells[key][metric].append(row[metric])
+        cells[key]["_n"].append(1)
+
+    header = f"{'family':<20}{'S':>3}  {'rule':<14}{'n':>5}" + "".join(f"{m[:7]:>8}" for m in metrics)
+    rows = []
+    for family in FAMILY_ORDER:
+        for size in sorted({key[1] for key in cells if key[0] == family}):
+            for rule in RULE_ORDER:
+                values = cells.get((family, size, rule))
+                if not values:
+                    continue
+                rows.append(f"{family:<20}{size:>3}  {rule:<14}{len(values['_n']):>5}"
+                            + "".join(f"{_mean(values.get(m)):>8}" for m in metrics))
+    return _table("estimator family x panel size x pooling rule, mean over panels", header, rows)
 
 
 def _table(title: str, header: str, rows: Sequence[str]) -> List[str]:

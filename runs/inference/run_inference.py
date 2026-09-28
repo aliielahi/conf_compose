@@ -21,6 +21,8 @@ def parse_args():
     parser.add_argument("--no-verbalized", action="store_true")
     parser.add_argument("--n-val", type=split_count, help="calibration examples: a count, `all`, or `none`")
     parser.add_argument("--n-test", type=split_count, help="evaluated examples: a count, `all`, or `none`")
+    parser.add_argument("--retry-max-tokens", type=int,
+                        help="regenerate only truncated rows at this larger budget, then rescore them")
     parser.add_argument("--all-signals", action="store_true",
                         help="also in-context verification and the content-free debiased sequence score")
     parser.add_argument("--dry-run", action="store_true", help="list what is missing and exit")
@@ -34,7 +36,8 @@ def requested(args):
     return [InferenceSettings(task=task, model=model, n_val=args.n_val, n_test=args.n_test,
                               answer_temperature=args.answer_temperature, voter=voter,
                               verbalized=not args.no_verbalized,
-                              verification_context=args.all_signals, debias=args.all_signals)
+                              verification_context=args.all_signals, debias=args.all_signals,
+                              retry_max_tokens=args.retry_max_tokens)
             for task in args.tasks for model in args.models
             for voter in range(args.voters if args.answer_temperature > 0 else 1)]
 
@@ -83,6 +86,7 @@ def _spawn(model, args):
             command += [flag, str(value)]
     command += ["--no-verbalized"] if args.no_verbalized else []
     command += ["--all-signals"] if args.all_signals else []
+    command += ["--retry-max-tokens", str(args.retry_max_tokens)] if args.retry_max_tokens else []
     result = subprocess.run(command)
     if result.returncode != 0:
         raise SystemExit(f"{model} failed with exit code {result.returncode}")
