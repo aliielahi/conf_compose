@@ -180,3 +180,82 @@ def test_scoring_a_fully_cached_batch_never_calls_the_tokenizer():
 
 def _explode(*args, **kwargs):
     raise AssertionError("tokenizer called with an empty batch")
+
+
+def test_atomic_report_separates_own_answers_from_vote_and_counts_missing():
+    from conf_compose.composition.report import atomic_consistency_row
+
+    items = [
+        Item("1", "q", "A", [stream(0, "B", ["B"] * 5), stream(1, "A", ["A"] * 5),
+                              stream(2, "A", ["A"] * 5)]),
+        Item("2", "q", "B", [stream(0, "A", ["A"] * 5), stream(1, "B", ["B"] * 5),
+                              stream(2, "C", ["C"] * 5)]),
+        Item("3", "q", "C", [stream(0, None, ["C"] * 5), stream(1, "C", ["C"] * 5),
+                              stream(2, "C", [None] * 5)]),
+        Item("4", "q", "A", [stream(i, None, [None] * 5) for i in range(3)]),
+    ]
+    row = atomic_consistency_row(ChoiceTask(), items, ["m0", "m1", "m2"])
+    assert row["single_accuracy"] == [0, 0.75, 0.5]
+    assert row["voting_accuracy"] == 0.5  # Question 2 ties and keeps m0's wrong A.
+    assert row["single_confidence_coverage"] == [0.5, 0.75, 0.5]
+    assert row["single_answer_coverage"] == [0.5, 0.75, 0.75]
+    assert row["voting_confidence_coverage"] == 0.75
+    assert row["voting_full_source_coverage"] == 0.5
+    assert row["voting_mean_sources"] == pytest.approx(8 / 3)
+    assert row["vote_tie_rate"] == 0.25
+    assert row["single_ece"][0] == pytest.approx(5.5 / 6)
+    assert row["single_auarc"][0] == 0
+    assert row["single_auroc"][0] is None  # All wrong still has valid ECE/AUARC.
+    assert all(len(row[f"{rule}_ece_auarc"]) == 2
+               for rule in ("mean", "logodds_sum", "logodds_mean"))
+
+
+def test_atomic_csv_runner_uses_each_subsets_vote_and_roundtrips_lists(tmp_path, monkeypatch):
+    import csv
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    from conf_compose.pipelines.inference import InferenceSettings, inference_dir
+
+    spec = importlib.util.spec_from_file_location(
+        "voting_atomic_runner", Path(__file__).parents[1] / "runs/experiment02-voting_composition/run.py")
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    store, output = tmp_path / "inferences", tmp_path / "atomic.csv"
+    models = ["vllm/m0", "vllm/m1", "vllm/m2"]
+    originals = {}
+    for model, answers in zip(models, [("B", "A"), ("A", "B"), ("A", "C")]):
+        settings = InferenceSettings(task="csqa", model=model, n_val=0, n_test=-1,
+                                     answer_temperature=0.7, verification_context=True, debias=True)
+        directory = inference_dir(settings, store)
+        directory = directory.with_name(directory.name + "-old-digest")
+        directory.mkdir(parents=True)
+        (directory / "settings.json").write_text(json.dumps({"settings": settings.to_dict()}))
+        path = directory / "test.jsonl"
+        path.write_text("".join(json.dumps({"id": str(i), "question": "q", "gold": gold,
+                                           "prediction": answer, "confidence": {},
+                                           "sampled_answers": {"consistency_t0.7": [answer] * 5}}) + "\n"
+                                for i, (gold, answer) in enumerate(zip(("A", "B"), answers))))
+        originals[path] = path.read_bytes()
+    monkeypatch.setattr(runner, "load_model", _explode)
+    monkeypatch.setattr("sys.argv", ["run.py", "--tasks", "csqa", "--models", *models,
+                                     "--voters", "1", "--targets", "majority", "--families", "cons",
+                                     "--sizes", "2", "--samples", "5", "--n-val", "none", "--n-test", "all",
+                                     "--all-signals", "--holdout", "0", "--store", str(store),
+                                     "--atomic-csv", str(output)])
+    runner.main()
+    with output.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 3
+    by_models = {tuple(json.loads(row["models"])): row for row in rows}
+    first = by_models[tuple(models[:2])]
+    last = by_models[tuple(models[1:])]
+    assert float(first["voting_accuracy"]) == 0  # Not the three-model vote (50%).
+    assert float(last["voting_accuracy"]) == 1
+    assert json.loads(first["single_accuracy"]) == [0, 1]
+    assert json.loads(first["single_auroc"]) == [None, None]
+    assert len(json.loads(first["mean_ece_auarc"])) == 2
+    assert first["eval_ids_sha256"] == last["eval_ids_sha256"]
+    assert {path: path.read_bytes() for path in originals} == originals
+    assert set(tmp_path.iterdir()) == {store, output}  # No extra report directories.

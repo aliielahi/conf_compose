@@ -19,6 +19,9 @@ from .zero_shot import RECORD_SCHEMA, ZeroShotConfig, retry_truncated, run_zero_
 
 STORE = RESULTS_DIR / "inferences"
 
+# Options added after cells were written; at their default they stay out of the digest so old cells resolve.
+ADDITIVE_DEFAULTS = {"retry_max_tokens": None, "candidate_scores": False, "candidate_models": None}
+
 
 def load_model(model: str, cache_dir=None, **overrides):
     """One loaded model, with the local-engine defaults and any template mode this alias needs."""
@@ -90,8 +93,9 @@ class InferenceSettings:
 
     @property
     def digest(self) -> str:
-        """Unset options are omitted, so adding one never changes an existing cell's identity."""
-        payload = {key: value for key, value in asdict(self.filled()).items() if value is not None}
+        """Options left at an additive default are omitted, so adding one never moves an existing cell."""
+        payload = {key: value for key, value in asdict(self.filled()).items()
+                   if value is not None and ADDITIVE_DEFAULTS.get(key, object()) != value}
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:8]
 
     def to_dict(self) -> Dict[str, Any]:

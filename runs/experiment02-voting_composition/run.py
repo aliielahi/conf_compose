@@ -1,7 +1,10 @@
 """Experiment 02: does pooling confidence across independent voters beat one voter, at matched budget?"""
 
 import argparse
+import csv
 import hashlib
+import io
+import itertools
 import json
 import time
 from pathlib import Path
@@ -9,6 +12,7 @@ from pathlib import Path
 from conf_compose.composition import (FAMILIES, GridConfig, attach_target_scores, best_by_validation,
                                       build_panels, collect, evaluate, fit_intercepts, format_cell,
                                       format_table, from_zero_shot, rows_from)
+from conf_compose.composition.report import atomic_consistency_row
 from conf_compose.constants import RESULTS_DIR
 from conf_compose.data import get_task
 from conf_compose.pipelines.inference import (STORE, by_model, describe, ensure_inference, inference_dir,
@@ -43,7 +47,20 @@ def parse_args():
     parser.add_argument("--local-only", action="store_true", help="fail instead of loading a model")
     parser.add_argument("--store", default=str(STORE))
     parser.add_argument("--out-dir", default=str(RESULTS_DIR / NAME))
-    return parser.parse_args()
+    parser.add_argument("--atomic-csv", metavar="PATH",
+                        help="offline consistency-only CSV: one row per task and exact model subset; "
+                             "includes own-answer member baselines, skips normal reports/calibration/bootstrap")
+    args = parser.parse_args()
+    if args.atomic_csv:
+        if args.voters != 1 or args.targets != ["majority"] or args.families != ["cons"] or args.samples != [5]:
+            parser.error("--atomic-csv requires --voters 1 --targets majority --families cons --samples 5")
+        if len(set(args.models)) != len(args.models):
+            parser.error("--atomic-csv requires distinct model names")
+        if not args.sizes or any(size < 1 or size > len(args.models) for size in args.sizes):
+            parser.error("every atomic --sizes value must be between 1 and the number of --models")
+        if not 0 <= args.holdout < 1:
+            parser.error("--holdout must be in [0, 1)")
+    return args
 
 
 def needed(args):
@@ -81,10 +98,15 @@ def needed_for(task, args):
     return [s for s in needed(args) if s.task == task]
 
 
-def load_splits(task_name, args):
+def load_splits(task_name, args, directories=None):
     """Validation and test items; when the sweep generated no validation, hold out part of test instead."""
-    test = from_zero_shot(split_paths(task_name, args, "test"))
-    validation_paths = split_paths(task_name, args, "validation")
+    test_paths = (split_paths(task_name, args, "test") if directories is None else
+                  {p.name: p / "test.jsonl" for p in directories})
+    validation_paths = (split_paths(task_name, args, "validation") if directories is None else
+                        {p.name: p / "validation.jsonl" for p in directories if (p / "validation.jsonl").exists()})
+    if directories is not None and validation_paths and len(validation_paths) != len(directories):
+        raise SystemExit(f"{task_name}: only some models have validation files")
+    test = from_zero_shot(test_paths)
     if validation_paths:
         return from_zero_shot(validation_paths), test, False
     cut = int(len(test) * args.holdout)
@@ -130,6 +152,9 @@ def run_cell(task_name, target, args):
 
 def main():
     args = parse_args()
+    if args.atomic_csv:
+        run_atomic_csv(args)
+        return
     status = Status(NAME, total=len(args.tasks) * len(args.targets))
     status.stage("checking the inference store")
     ensure_all(args)
@@ -149,6 +174,62 @@ def main():
     (Path(args.out_dir) / "summary.txt").write_text(text)
     print(text)
     status.finish(f"saved {Path(args.out_dir) / 'summary.txt'}")
+
+
+def run_atomic_csv(args):
+    """Use each subset's own vote and question intersection; never load a model or alter inference files."""
+    subsets = [subset for size in dict.fromkeys(args.sizes)
+               for subset in itertools.combinations(args.models, size)]
+    rows = []
+    for task_name in dict.fromkeys(args.tasks):
+        saved = _atomic_inferences(task_name, args)
+        for subset in subsets:
+            directories = [saved[model] for model in subset]
+            validation, test, carved = load_splits(task_name, args, directories)
+            row = atomic_consistency_row(get_task(task_name), test, [p.name for p in directories], samples=5)
+            row["models"] = list(subset)
+            row.update({
+                "n_holdout": len(validation),
+                "holdout_fraction": args.holdout if carved else 0.0,
+                "evaluation_split": "test_hash_remainder" if carved else "test",
+                "eval_ids_sha256": hashlib.sha256(json.dumps(sorted(item.example_id for item in test)).encode()).hexdigest(),
+                "inferences": [p.name for p in directories], "code": source_hash("conf_compose.composition"),
+            })
+            rows.append(row)
+            print(f"  {task_name} / {' + '.join(subset)}: n={row['n_eval']}, "
+                  f"voting accuracy={row['voting_accuracy']:.4f}", flush=True)
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({key: json.dumps(value, allow_nan=False) if isinstance(value, (list, dict)) else value
+                         for key, value in row.items()})
+    path = Path(args.atomic_csv)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(output.getvalue())
+    print(f"saved {len(rows)} atomic row(s) to {path}")
+
+
+def _atomic_inferences(task_name, args):
+    """Resolve old digests by generation settings; unrelated added estimators do not change consistency."""
+    keys = ("task", "model", "n_val", "n_test", "max_tokens", "answer_temperature", "voter",
+            "consistency_samples", "consistency_temperature", "retry_max_tokens")
+    metadata = [(p.parent, json.loads(p.read_text())["settings"])
+                for p in sorted(Path(args.store, task_name).glob("*/settings.json"))]
+    saved = {}
+    for settings in needed_for(task_name, args):
+        wanted = settings.to_dict()
+        matches = [directory for directory, info in metadata
+                   if all(info.get(key) == wanted.get(key) for key in keys)
+                   and (directory / "test.jsonl").exists()]
+        exact = inference_dir(settings, args.store)
+        if exact in matches:
+            matches = [exact]
+        if len(matches) != 1:
+            raise SystemExit(f"{task_name}/{settings.model}: expected one saved inference matching generation "
+                             f"and sampling settings, found {len(matches)}. Check --store and split sizes.")
+        saved[settings.model] = matches[0]
+    return saved
 
 
 def _cell_id(args, task_name):

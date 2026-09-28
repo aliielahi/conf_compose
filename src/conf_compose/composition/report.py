@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
+from conf_compose.data import Example
+from conf_compose.utils.metrics import auarc, auroc, brier, ece, nll
+
+from .candidates import candidate_set, support_of
+from .methods import majority_answer, pool_methods
 
 FAMILY_ORDER = ["cons", "ver", "verb", "seq", "vertgt", "cons+ver", "cons+vertgt", "cons+ver+verb",
                 "cons+ver+verb+seq"]
@@ -13,6 +20,98 @@ RULE_ORDER = ["mean", "logodds_sum", "logodds_mean"]
 MATRIX_METRICS = ["coverage", "accuracy", "auroc", "auarc", "ece", "brier", "nll"]
 SHORT = {"consistency": "cons", "verification": "ver", "verbalized": "verb", "seq": "seq",
          "ver_target": "vertgt"}
+
+
+def atomic_consistency_row(task, items, models: Sequence[str], samples: int = 5) -> Dict[str, Any]:
+    """One exact panel: members rate their own answers; pooled scores rate this panel's vote.
+
+    Accuracy uses every supplied question (missing answers are incorrect). Confidence metrics
+    use available scores, with separate coverage. No parameters are fitted. Model/list order is
+    preserved, and the existing majority rule breaks ties in agent order.
+    """
+    if not items or not models or len(set(models)) != len(models) or samples < 1:
+        raise ValueError("atomic reporting needs examples, distinct models and a positive sample count")
+    single_correct = [0] * len(models)
+    single_answered = [0] * len(models)
+    single_scores = [[] for _ in models]
+    single_labels = [[] for _ in models]
+    pooled_scores = {rule: [] for rule in RULE_ORDER}
+    pooled_labels = []
+    voting_correct = voting_answered = ties = full_sources = 0
+    source_counts = []
+    for item in items:
+        by_model = {stream.model: stream for stream in item.round_streams((0,))}
+        streams = [by_model[model] for model in models]
+        if [s.model for s in sorted(streams, key=lambda s: s.agent)] != list(models):
+            raise ValueError("model order must match agent order for reproducible vote ties")
+        example = Example(item.example_id, item.question, item.gold)
+        candidates = candidate_set(task, item, streams)
+        supports = [support_of(task, s.samples[:samples], candidates)
+                    if len(s.samples) >= samples else None for s in streams]
+        for i, (stream, support) in enumerate(zip(streams, supports)):
+            correct = int(task.is_correct(stream.answer, example))
+            single_correct[i] += correct
+            single_answered[i] += stream.answer is not None
+            score = support.binary(stream.answer) if support else None
+            if score is not None:
+                single_scores[i].append(score)
+                single_labels[i].append(correct)
+
+        target = majority_answer(task, streams)
+        if target is None:
+            continue
+        correct = int(task.is_correct(target, example))
+        voting_correct += correct
+        voting_answered += 1
+        votes = [sum(s.answer is not None and task.equivalent(s.answer, c) for s in streams)
+                 for c in candidates]
+        ties += votes.count(max(votes)) > 1
+        scores = [score for support in supports if support is not None
+                  if (score := support.binary(target)) is not None]
+        if scores:
+            source_counts.append(len(scores))
+            full_sources += len(scores) == len(models)
+            pooled_labels.append(correct)
+            for rule, prediction in pool_methods(scores).items():
+                pooled_scores[rule].append(prediction.score)
+
+    single = [_atomic_metrics(scores, labels) for scores, labels in zip(single_scores, single_labels)]
+    pooled = {rule: _atomic_metrics(scores, pooled_labels) for rule, scores in pooled_scores.items()}
+    count = len(items)
+    return {
+        "task": task.name, "n_models": len(models), "models": list(models),
+        "samples_per_model": samples,
+        "single_accuracy": [value / count for value in single_correct],
+        "single_ece": [row["ece"] for row in single],
+        "single_auarc": [row["auarc"] for row in single],
+        "voting_accuracy": voting_correct / count,
+        **{f"{rule}_ece_auarc": [pooled[rule]["ece"], pooled[rule]["auarc"]] for rule in RULE_ORDER},
+        "n_eval": count,
+        "single_answer_coverage": [value / count for value in single_answered],
+        "single_confidence_coverage": [len(scores) / count for scores in single_scores],
+        "voting_answer_coverage": voting_answered / count,
+        "voting_confidence_coverage": len(pooled_labels) / count,
+        "voting_full_source_coverage": full_sources / count,
+        "voting_mean_sources": sum(source_counts) / len(source_counts) if source_counts else None,
+        "vote_tie_rate": ties / count,
+        "single_auroc": [row["auroc"] for row in single],
+        "single_brier": [row["brier"] for row in single],
+        "single_nll": [row["nll"] for row in single],
+        "pooling_order": list(RULE_ORDER),
+        **{f"pooling_{metric}": [pooled[rule][metric] for rule in RULE_ORDER]
+           for metric in ("auroc", "brier", "nll")},
+        "estimator": "consistency", "selection": "majority", "smoothing": "add_half",
+        "calibration": "none", "tie_break": "first_model_in_cli_order",
+    }
+
+
+def _atomic_metrics(scores, labels):
+    """Reliability metrics remain defined for one-class data; AUROC does not."""
+    out = {}
+    for name, metric in (("ece", ece), ("auarc", auarc), ("auroc", auroc), ("brier", brier), ("nll", nll)):
+        value = metric(scores, labels) if scores else None
+        out[name] = value if value is not None and math.isfinite(value) else None
+    return out
 
 
 def load_runs(root: Path) -> Dict[Tuple[str, str], Dict[str, Any]]:

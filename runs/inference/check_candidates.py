@@ -89,6 +89,23 @@ def main():
     print(f"\n{'model':<14}{'context':<10}{'estimator':<12}{'cov':>7}{'auroc':>8}{'auarc':>8}"
           f"{'ece':>8}{'sat>.99':>9}{'mean':>8}")
     for model, rows in sorted(cells.items()):
+        # the incumbent baseline, on exactly these examples and this target
+        support, labels = [], []
+        for example_id in shared:
+            row = rows[example_id]
+            target = row["prediction"] if args.target == "own" else targets[example_id]
+            samples = (row.get("sampled_answers") or {}).get("consistency_t0.7") or []
+            valid = [a for a in samples if a is not None]
+            if target is None or not valid:
+                continue
+            support.append(sum(task.equivalent(a, target) for a in valid) / len(valid))
+            labels.append(float(task.is_correct(target, Example(example_id, "", row["gold"]))))
+        if len(support) >= 10 and 0 < sum(labels) < len(labels):
+            print(f"{model.replace('vllm__', '')[:13]:<14}{'samples':<10}{'consistency':<12}"
+                  f"{len(support) / len(shared):>7.3f}{auroc(support, labels):>8.3f}"
+                  f"{auarc(support, labels):>8.3f}{ece(support, labels):>8.3f}"
+                  f"{sum(s > 0.99 for s in support) / len(support):>9.3f}"
+                  f"{sum(support) / len(support):>8.3f}")
         for context in ("direct", "reasoned"):
             series = defaultdict(lambda: ([], []))
             for example_id in shared:
