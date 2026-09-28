@@ -7,8 +7,9 @@ import json
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from conf_compose.confidence_estimators.sequence_prob import Candidate, CandidateScorer
 from conf_compose.constants import RESULTS_DIR, SAMPLING, TASKS
 
 from conf_compose.utils.llm_calls import LLM
@@ -55,6 +56,8 @@ class InferenceSettings:
     verification_context: bool = False
     debias: bool = False
     retry_max_tokens: Optional[int] = None
+    candidate_scores: bool = False
+    candidate_models: Optional[Tuple[str, ...]] = None
 
     def filled(self) -> "InferenceSettings":
         """Task defaults applied; None means the default size and 0 means the whole split, unsampled."""
@@ -77,8 +80,13 @@ class InferenceSettings:
     @property
     def tag(self) -> str:
         retry = f"_r{self.retry_max_tokens}" if self.retry_max_tokens else ""
+        scored = f"_cs{len(self.candidate_models or ())}" if self.candidate_scores else ""
         return (f"{self.model.replace('/', '__')}--{self.decoding}"
-                f"_k{self.consistency_samples}_{self.size}{retry}")
+                f"_k{self.consistency_samples}_{self.size}{retry}{scored}")
+
+    def base(self) -> "InferenceSettings":
+        """The same cell without candidate scoring, which is where the candidate answers come from."""
+        return replace(self.filled(), candidate_scores=False, candidate_models=None)
 
     @property
     def digest(self) -> str:
@@ -132,6 +140,8 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
     combined = run_zero_shot(llm, task, examples, config, timings)
     if settings.retry_max_tokens:
         combined = retry_truncated(llm, task, examples, combined, config, settings.retry_max_tokens, timings)
+    if settings.candidate_scores:
+        add_candidate_scores(llm, task, examples, combined, settings, store)
     records = {"validation": combined[:len(validation)], "test": combined[len(validation):]}
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -144,6 +154,74 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
          "splits": {split: split_summary(rows) for split, rows in records.items() if rows},
          "timings": timings, "seconds": round(time.time() - start, 1)}, indent=2))
     return out_dir
+
+
+def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Dict[str, List[Candidate]]:
+    """Every distinct answer any model produced for an example, plus the task's full label set if it has one."""
+    generated: Dict[str, List[str]] = {}
+    options: Dict[str, Dict[str, Any]] = {}
+    seen, wanted = [], []
+    for model in settings.candidate_models or (settings.model,):
+        source = replace(settings.base(), model=model)
+        for split in ("validation", "test"):
+            path = records_path(source, split, store)
+            wanted.append(path)
+            if not path.exists():
+                continue
+            seen.append(path)
+            for line in path.read_text().splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if row.get("choices"):
+                    options.setdefault(row["id"], row["choices"])
+                if row["prediction"] is not None:
+                    generated.setdefault(row["id"], []).append(row["prediction"])
+                else:
+                    generated.setdefault(row["id"], [])
+    if not generated:
+        raise RuntimeError("candidate pool is empty: no source records found for "
+                           f"{len(wanted)} expected path(s). The scoring run must use the same flags as "
+                           f"the generation run, or the digests will not match. First expected:\n"
+                           f"  {wanted[0] if wanted else '-'}")
+
+    # Labels come first so every one keeps its option text; a generated answer outside the set is appended.
+    pool: Dict[str, List[Candidate]] = {}
+    for example_id, answers in generated.items():
+        row: List[Candidate] = []
+        for label, text in sorted(options.get(example_id, {}).items()):
+            row.append(Candidate(label, label, text, "labels"))
+        for answer in answers:
+            existing = next((c for c in row if task.equivalent(c.answer, answer)), None)
+            if existing is None:
+                row.append(Candidate(answer, answer, None, "generated"))
+            elif existing.source == "labels":
+                existing.source = "labels+generated"
+        pool[example_id] = row
+    print(f"    candidates: read {len(seen)}/{len(wanted)} source file(s)", flush=True)
+    return pool
+
+
+def add_candidate_scores(llm, task, examples, records, settings: InferenceSettings,
+                         store: Path = STORE) -> None:
+    """Attach this model's token log-probs for every candidate, in place, one entry per record."""
+    pool = candidate_pool(task, settings, store)
+    missing = [record["id"] for record in records if record["id"] not in pool]
+    print(f"    candidates: pool covers {len(records) - len(missing)}/{len(records)} example(s), "
+          f"mean {sum(len(pool.get(r['id'], ())) for r in records) / max(len(records), 1):.1f} per example",
+          flush=True)
+    rows = [pool.get(record["id"], []) for record in records]
+    starts = [_answer_start(task, record) for record in records]
+    scorer = CandidateScorer(llm, debias=settings.debias)
+    for record, entry in zip(records, scorer.score(task, examples, [r["response"] for r in records],
+                                                   starts, rows)):
+        record["candidate_scores"] = entry
+
+
+def _answer_start(task, record: Dict[str, Any]) -> Optional[int]:
+    """Where this model's own answer begins in its response: the fixed boundary for reasoned scoring."""
+    answer = task.extract_answer(record["response"]) if record.get("response") else None
+    return answer.start if answer else None
 
 
 def split_count(value: str) -> int:

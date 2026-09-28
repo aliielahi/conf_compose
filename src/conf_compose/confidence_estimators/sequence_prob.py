@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 
 from conf_compose.prompts import ContentFreeInputs
 
 from .context import Target
 
 SCOPES = ("answer", "answer_no_reasoning", "response")
+
+# Contexts a candidate can be scored in; `reasoned` fixes the boundary at the model's own answer start.
+CONTEXTS = ("direct", "reasoned")
 
 
 @dataclass
@@ -125,3 +128,83 @@ def _logmeanexp(values: Sequence[float]) -> Optional[float]:
         return None
     top = max(values)
     return top + math.log(sum(math.exp(v - top) for v in values) / len(values))
+
+
+@dataclass
+class Candidate:
+    """One answer string a model is asked to score, with enough identity to never lose what it was."""
+    answer: str
+    text: str
+    option: Optional[str] = None
+    source: str = "generated"
+
+    def to_dict(self) -> dict:
+        return {"answer": self.answer, "text": self.text, "option": self.option, "source": self.source}
+
+
+class CandidateScorer:
+    """Score any candidate answer under one model, whether or not that model ever produced it.
+
+    Raw per-token log-probabilities are returned untouched; every derived score (mean, sum, minimum,
+    bottom tail, debiasing, normalisation over a candidate set) is a downstream choice.
+    """
+
+    def __init__(self, llm, contexts: Sequence[str] = CONTEXTS,
+                 nulls: Sequence[str] = ContentFreeInputs.inputs, debias: bool = True,
+                 system: Optional[str] = None):
+        for context in contexts:
+            if context not in CONTEXTS:
+                raise ValueError(f"context must be one of {CONTEXTS}")
+        if not hasattr(llm, "score"):
+            raise TypeError(f"{llm!r} cannot teacher-force continuations; use a local model")
+        self.llm = llm
+        self.contexts = tuple(contexts)
+        self.nulls = list(nulls) if debias else []
+        self.system = system
+
+    def score(self, task, examples: Sequence[Any], responses: Sequence[Optional[str]],
+              starts: Sequence[Optional[int]], candidates: Sequence[Sequence[Candidate]]) -> List[dict]:
+        """One entry per example holding every candidate's token log-probs in every requested context."""
+        out = [{"version": 1, "answer_prefix": task.answer_prefix, "answer_start": start,
+                "candidates": [candidate.to_dict() for candidate in row]}
+               for start, row in zip(starts, candidates)]
+
+        for context in self.contexts:
+            requests, slots = [], []
+            for index, (example, response, start, row) in enumerate(
+                    zip(examples, responses, starts, candidates)):
+                prefix = self._prefix(task, response, start, context)
+                for position, candidate in enumerate(row):
+                    if prefix is None:
+                        out[index]["candidates"][position][context] = None
+                        out[index]["candidates"][position].setdefault("errors", {})[context] = "no answer span"
+                        continue
+                    requests.append((task.prompt(example), prefix, candidate.text))
+                    slots.append((index, position))
+            for (index, position), logprobs in zip(slots, self._run(requests)):
+                out[index]["candidates"][position][context] = {"logprobs": logprobs} if logprobs else None
+
+        for null in self.nulls:
+            requests, slots = [], []
+            for index, row in enumerate(candidates):
+                for position, candidate in enumerate(row):
+                    requests.append((task.null_prompt(null), task.answer_prefix, candidate.text))
+                    slots.append((index, position))
+            for (index, position), logprobs in zip(slots, self._run(requests)):
+                entry = out[index]["candidates"][position].setdefault("null", {})
+                entry[null] = logprobs or None
+        return out
+
+    def _prefix(self, task, response: Optional[str], start: Optional[int], context: str) -> Optional[str]:
+        """`direct` asks the question alone; `reasoned` replays the model's own words up to its answer."""
+        if context == "direct":
+            return task.answer_prefix
+        if not response or start is None:
+            return None
+        return response[:start]
+
+    def _run(self, requests: Sequence[tuple]) -> List[List[float]]:
+        if not requests:
+            return []
+        prompts, prefixes, continuations = ([r[k] for r in requests] for k in range(3))
+        return self.llm.score(prompts, continuations, prefixes, system=self.system)

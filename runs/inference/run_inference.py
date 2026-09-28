@@ -21,6 +21,10 @@ def parse_args():
     parser.add_argument("--no-verbalized", action="store_true")
     parser.add_argument("--n-val", type=split_count, help="calibration examples: a count, `all`, or `none`")
     parser.add_argument("--n-test", type=split_count, help="evaluated examples: a count, `all`, or `none`")
+    parser.add_argument("--candidate-pool", nargs="+",
+                        help="models whose answers form the candidate set; set automatically by the parent")
+    parser.add_argument("--score-candidates", action="store_true",
+                        help="also score every candidate answer under every model (sequence-prob family)")
     parser.add_argument("--retry-max-tokens", type=int,
                         help="regenerate only truncated rows at this larger budget, then rescore them")
     parser.add_argument("--all-signals", action="store_true",
@@ -37,7 +41,10 @@ def requested(args):
                               answer_temperature=args.answer_temperature, voter=voter,
                               verbalized=not args.no_verbalized,
                               verification_context=args.all_signals, debias=args.all_signals,
-                              retry_max_tokens=args.retry_max_tokens)
+                              retry_max_tokens=args.retry_max_tokens,
+                              candidate_scores=args.score_candidates,
+                              candidate_models=tuple(args.candidate_pool or args.models)
+                              if args.score_candidates else None)
             for task in args.tasks for model in args.models
             for voter in range(args.voters if args.answer_temperature > 0 else 1)]
 
@@ -79,6 +86,7 @@ def run_one_model(model, group, args, status):
 def _spawn(model, args):
     """One model per subprocess: the engine's GPU memory is released when the child exits."""
     command = [sys.executable, __file__, "--tasks", *args.tasks, "--models", model,
+               "--candidate-pool", *args.models,
                "--voters", str(args.voters), "--answer-temperature", str(args.answer_temperature),
                "--store", args.store, "--in-process"]
     for flag, value in (("--n-val", args.n_val), ("--n-test", args.n_test)):
@@ -87,6 +95,7 @@ def _spawn(model, args):
     command += ["--no-verbalized"] if args.no_verbalized else []
     command += ["--all-signals"] if args.all_signals else []
     command += ["--retry-max-tokens", str(args.retry_max_tokens)] if args.retry_max_tokens else []
+    command += ["--score-candidates"] if args.score_candidates else []
     result = subprocess.run(command)
     if result.returncode != 0:
         raise SystemExit(f"{model} failed with exit code {result.returncode}")
