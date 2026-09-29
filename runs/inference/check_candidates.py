@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument("--task", required=True)
     parser.add_argument("--split", default="test")
     parser.add_argument("--target", default="majority", choices=["majority", "own"])
+    parser.add_argument("--match", default="", help="substring selecting one cell per model, e.g. _full_")
     parser.add_argument("--store", default=str(STORE))
     return parser.parse_args()
 
@@ -49,11 +50,23 @@ def sigmoid(value):
     return 1 / (1 + math.exp(-value)) if value >= 0 else math.exp(value) / (1 + math.exp(value))
 
 
-def load_cells(root, split):
-    cells = {}
+def load_cells(root, split, match=""):
+    """One candidate-scored cell per model; two cells for a model is an error, never a silent choice."""
+    found = {}
     for path in sorted(root.glob(f"*_cs*/{split}.jsonl")):
+        if match and match not in path.parent.name:
+            continue
+        found.setdefault(base_model(path.parent.name), []).append(path)
+    clashes = {model: paths for model, paths in found.items() if len(paths) > 1}
+    if clashes:
+        listing = "\n".join(f"  {model}:\n" + "\n".join(f"    {p.parent.name}" for p in paths)
+                            for model, paths in clashes.items())
+        raise SystemExit("several candidate-scored cells per model; pass --match to pick one "
+                         f"(e.g. --match _full_ or --match _n100_):\n{listing}")
+    cells = {}
+    for model, (path,) in found.items():
         rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-        cells[base_model(path.parent.name)] = {row["id"]: row for row in rows}
+        cells[model] = {row["id"]: row for row in rows}
     return cells
 
 
@@ -71,7 +84,7 @@ def majority_of(task, answers):
 def main():
     args = parse_args()
     task = get_task(args.task)
-    cells = load_cells(Path(args.store, args.task), args.split)
+    cells = load_cells(Path(args.store, args.task), args.split, args.match)
     if not cells:
         print(f"no candidate-scored cells under {Path(args.store, args.task)} (need --score-candidates)")
         return
