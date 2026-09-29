@@ -13,7 +13,7 @@ from .confidence import ConfidenceConfig, estimate_confidence, _timed
 ZeroShotConfig = ConfidenceConfig
 
 # Bump when a record gains or loses a field, so a cell's contents are identifiable after the fact.
-RECORD_SCHEMA = 4
+RECORD_SCHEMA = 5
 
 
 def run_zero_shot(llm, task, examples, config: Optional[ConfidenceConfig] = None,

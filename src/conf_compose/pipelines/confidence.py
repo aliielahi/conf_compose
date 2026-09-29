@@ -26,6 +26,7 @@ class ConfidenceConfig:
     verification_context: bool = True
     consistency_temperatures: Tuple[float, ...] = (SAMPLING["consistency_temperature"],)
     consistency_samples: int = SAMPLING["consistency_samples"]
+    consistency_logprobs: bool = False
     top_p: float = SAMPLING["top_p"]
     top_k: int = SAMPLING["top_k"]
 
@@ -87,8 +88,8 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
             output.details["verbalized_raw"] = result.raw
 
     for temperature in config.consistency_temperatures:
-        estimator = ConsistencyConfidence(llm, config.consistency_samples, temperature, config.top_p, config.top_k,
-                                          config.max_tokens)
+        estimator = ConsistencyConfidence(llm, config.consistency_samples, temperature, config.top_p,
+                                          config.top_k, config.max_tokens, config.consistency_logprobs)
         name = f"consistency_t{temperature:g}"
         with _timed(timings, name, cache):
             results = estimator.estimate(task, targets)
@@ -98,6 +99,8 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
                                    f"{name}_entropy": result.entropy_confidence})
             output.details.setdefault("sampled_answers", {})[name] = result.answers
             output.details.setdefault("sampled_responses", {})[name] = result.responses
+            if config.consistency_logprobs:
+                output.details.setdefault("sampled_logprobs", {})[name] = result.logprobs
     return outputs
 
 

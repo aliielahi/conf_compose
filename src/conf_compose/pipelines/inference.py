@@ -20,7 +20,8 @@ from .zero_shot import RECORD_SCHEMA, ZeroShotConfig, retry_truncated, run_zero_
 STORE = RESULTS_DIR / "inferences"
 
 # Options added after cells were written; at their default they stay out of the digest so old cells resolve.
-ADDITIVE_DEFAULTS = {"retry_max_tokens": None, "candidate_scores": False, "candidate_models": None}
+ADDITIVE_DEFAULTS = {"retry_max_tokens": None, "candidate_scores": False, "candidate_models": None,
+                     "candidate_samples": False, "consistency_logprobs": False}
 
 
 def load_model(model: str, cache_dir=None, **overrides):
@@ -61,6 +62,8 @@ class InferenceSettings:
     retry_max_tokens: Optional[int] = None
     candidate_scores: bool = False
     candidate_models: Optional[Tuple[str, ...]] = None
+    candidate_samples: bool = False
+    consistency_logprobs: bool = False
 
     def filled(self) -> "InferenceSettings":
         """Task defaults applied; None means the default size and 0 means the whole split, unsampled."""
@@ -84,12 +87,15 @@ class InferenceSettings:
     def tag(self) -> str:
         retry = f"_r{self.retry_max_tokens}" if self.retry_max_tokens else ""
         scored = f"_cs{len(self.candidate_models or ())}" if self.candidate_scores else ""
+        scored += "s" if self.candidate_scores and self.candidate_samples else ""
         return (f"{self.model.replace('/', '__')}--{self.decoding}"
-                f"_k{self.consistency_samples}_{self.size}{retry}{scored}")
+                f"_k{self.consistency_samples}_{self.size}{retry}{scored}"
+                + ("_lp" if self.consistency_logprobs else ""))
 
     def base(self) -> "InferenceSettings":
         """The same cell without candidate scoring, which is where the candidate answers come from."""
-        return replace(self.filled(), candidate_scores=False, candidate_models=None)
+        return replace(self.filled(), candidate_scores=False, candidate_models=None,
+                       candidate_samples=False)
 
     @property
     def digest(self) -> str:
@@ -134,7 +140,8 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
                             verbalized=settings.verbalized, verification=settings.verification,
                             verification_context=settings.verification_context, debias=settings.debias,
                             consistency_samples=settings.consistency_samples,
-                            consistency_temperatures=(settings.consistency_temperature,))
+                            consistency_temperatures=(settings.consistency_temperature,),
+                            consistency_logprobs=settings.consistency_logprobs)
     llm.execution = f"{settings.task}:{settings.decoding}"
     validation = [] if settings.n_val == 0 else task.load("validation", n=_count(settings.n_val))
     test = [] if settings.n_test == 0 else task.load("test", n=_count(settings.n_test))
@@ -161,8 +168,9 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
 
 
 def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Dict[str, List[Candidate]]:
-    """Every distinct answer any model produced for an example, plus the task's full label set if it has one."""
+    """Every distinct answer any model produced, its resamples if asked, plus the full label set if one exists."""
     generated: Dict[str, List[str]] = {}
+    sampled: Dict[str, List[str]] = {}
     options: Dict[str, Dict[str, Any]] = {}
     seen, wanted = [], []
     for model in settings.candidate_models or (settings.model,):
@@ -183,6 +191,9 @@ def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Di
                     generated.setdefault(row["id"], []).append(row["prediction"])
                 else:
                     generated.setdefault(row["id"], [])
+                if settings.candidate_samples:
+                    for name, answers in (row.get("sampled_answers") or {}).items():
+                        sampled.setdefault(row["id"], []).extend(a for a in answers if a is not None)
     if not generated:
         raise RuntimeError("candidate pool is empty: no source records found for "
                            f"{len(wanted)} expected path(s). The scoring run must use the same flags as "
@@ -195,14 +206,17 @@ def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Di
         row: List[Candidate] = []
         for label, text in sorted(options.get(example_id, {}).items()):
             row.append(Candidate(label, label, text, "labels"))
-        for answer in answers:
-            existing = next((c for c in row if task.equivalent(c.answer, answer)), None)
-            if existing is None:
-                row.append(Candidate(answer, answer, None, "generated"))
-            elif existing.source == "labels":
-                existing.source = "labels+generated"
+        for source, group in (("generated", answers), ("resampled", sampled.get(example_id, []))):
+            for answer in group:
+                existing = next((c for c in row if task.equivalent(c.answer, answer)), None)
+                if existing is None:
+                    row.append(Candidate(answer, answer, None, source))
+                elif source not in existing.source:
+                    existing.source = f"{existing.source}+{source}"
         pool[example_id] = row
-    print(f"    candidates: read {len(seen)}/{len(wanted)} source file(s)", flush=True)
+    mean = sum(len(v) for v in pool.values()) / max(len(pool), 1)
+    print(f"    candidates: read {len(seen)}/{len(wanted)} source file(s), mean {mean:.2f} per example"
+          + (" (resamples included)" if settings.candidate_samples else ""), flush=True)
     return pool
 
 

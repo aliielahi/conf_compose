@@ -25,6 +25,10 @@ def parse_args():
                         help="models whose answers form the candidate set; set automatically by the parent")
     parser.add_argument("--score-candidates", action="store_true",
                         help="also score every candidate answer under every model (sequence-prob family)")
+    parser.add_argument("--candidate-samples", action="store_true",
+                        help="widen the candidate set with the answers seen in the consistency resamples")
+    parser.add_argument("--consistency-logprobs", action="store_true",
+                        help="keep per-token scores for each resample; changes the request, so it re-samples")
     parser.add_argument("--retry-max-tokens", type=int,
                         help="regenerate only truncated rows at this larger budget, then rescore them")
     parser.add_argument("--all-signals", action="store_true",
@@ -44,7 +48,9 @@ def requested(args):
                               retry_max_tokens=args.retry_max_tokens,
                               candidate_scores=args.score_candidates,
                               candidate_models=tuple(args.candidate_pool or args.models)
-                              if args.score_candidates else None)
+                              if args.score_candidates else None,
+                              candidate_samples=args.candidate_samples,
+                              consistency_logprobs=args.consistency_logprobs)
             for task in args.tasks for model in args.models
             for voter in range(args.voters if args.answer_temperature > 0 else 1)]
 
@@ -96,6 +102,8 @@ def _spawn(model, args):
     command += ["--all-signals"] if args.all_signals else []
     command += ["--retry-max-tokens", str(args.retry_max_tokens)] if args.retry_max_tokens else []
     command += ["--score-candidates"] if args.score_candidates else []
+    command += ["--candidate-samples"] if args.candidate_samples else []
+    command += ["--consistency-logprobs"] if args.consistency_logprobs else []
     result = subprocess.run(command)
     if result.returncode != 0:
         raise SystemExit(f"{model} failed with exit code {result.returncode}")
