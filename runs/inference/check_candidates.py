@@ -76,8 +76,14 @@ def main():
         print(f"no candidate-scored cells under {Path(args.store, args.task)} (need --score-candidates)")
         return
     shared = sorted(set.intersection(*(set(rows) for rows in cells.values())))
+    counts = [len(((next(iter(cells.values()))[e].get("candidate_scores") or {}).get("candidates") or []))
+              for e in shared]
+    single = sum(c <= 1 for c in counts) / len(counts) if counts else 0
     print(f"{args.task}/{args.split}: {len(cells)} model(s), {len(shared)} shared example(s), "
           f"target={args.target}")
+    print(f"candidate set: mean {sum(counts) / max(len(counts), 1):.2f} per example, "
+          f"{100 * single:.0f}% have a single candidate"
+          + ("   <- norm_* is degenerate on those; it can only encode disagreement" if single > 0.2 else ""))
 
     targets, correct = {}, {}
     for example_id in shared:
