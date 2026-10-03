@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from conf_compose.composition.candidates import label_space
 from conf_compose.confidence_estimators.sequence_prob import Candidate, CandidateScorer
 from conf_compose.constants import RESULTS_DIR, SAMPLING, TASKS
 
@@ -201,10 +202,13 @@ def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Di
                            f"  {wanted[0] if wanted else '-'}")
 
     # Labels come first so every one keeps its option text; a generated answer outside the set is appended.
+    # A closed-label task with no per-example options (true/false) still gets its whole label set.
+    fallback = label_space(task) or ()
     pool: Dict[str, List[Candidate]] = {}
     for example_id, answers in generated.items():
         row: List[Candidate] = []
-        for label, text in sorted(options.get(example_id, {}).items()):
+        choices = options.get(example_id) or {label: None for label in fallback}
+        for label, text in sorted(choices.items()):
             row.append(Candidate(label, label, text, "labels"))
         for source, group in (("generated", answers), ("resampled", sampled.get(example_id, []))):
             for answer in group:
