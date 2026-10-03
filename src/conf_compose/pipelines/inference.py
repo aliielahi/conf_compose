@@ -149,9 +149,12 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
 
     start, timings = time.time(), {}
     examples = validation + test
-    combined = run_zero_shot(llm, task, examples, config, timings)
-    if settings.retry_max_tokens:
-        combined = retry_truncated(llm, task, examples, combined, config, settings.retry_max_tokens, timings)
+    combined = reuse_base_records(settings, examples, store)
+    if combined is None:
+        combined = run_zero_shot(llm, task, examples, config, timings)
+        if settings.retry_max_tokens:
+            combined = retry_truncated(llm, task, examples, combined, config, settings.retry_max_tokens,
+                                       timings)
     if settings.candidate_scores:
         add_candidate_scores(llm, task, examples, combined, settings, store)
     records = {"validation": combined[:len(validation)], "test": combined[len(validation):]}
@@ -166,6 +169,26 @@ def ensure_inference(settings: InferenceSettings, llm, task, store: Path = STORE
          "splits": {split: split_summary(rows) for split, rows in records.items() if rows},
          "timings": timings, "seconds": round(time.time() - start, 1)}, indent=2))
     return out_dir
+
+
+def reuse_base_records(settings: InferenceSettings, examples, store: Path = STORE):
+    """Candidate scoring only adds a field, so read the finished cell instead of regenerating it."""
+    if not settings.candidate_scores:
+        return None
+    base = settings.base()
+    if not exists(base, store):
+        return None
+    rows = []
+    for split in ("validation", "test"):
+        path = records_path(base, split, store)
+        if path.exists():
+            rows += [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    if len(rows) != len(examples) or any(r["id"] != e.id for r, e in zip(rows, examples)):
+        print(f"    base cell does not line up with the examples ({len(rows)} vs {len(examples)}); "
+              f"regenerating", flush=True)
+        return None
+    print(f"    reusing {len(rows)} record(s) from {inference_dir(base, store).name}", flush=True)
+    return rows
 
 
 def candidate_pool(task, settings: InferenceSettings, store: Path = STORE) -> Dict[str, List[Candidate]]:
