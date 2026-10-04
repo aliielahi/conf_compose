@@ -8,6 +8,7 @@ from pathlib import Path
 from conf_compose.composition import base_model
 from conf_compose.data import get_task
 from conf_compose.pipelines.inference import STORE
+from conf_compose.pipelines.zero_shot import RECORD_SCHEMA
 
 SIGNALS = ["seq_response", "seq_response_min", "seq_response_tail10", "seq_response_debiased",
            "verification", "verification_context", "verbalized", "consistency_t0.7"]
@@ -18,6 +19,7 @@ def parse_args():
     parser.add_argument("--task", required=True)
     parser.add_argument("--split", default="test")
     parser.add_argument("--expect", type=int, default=0, help="cells expected, 0 to skip the check")
+    parser.add_argument("--match", default="", help="substring selecting a cell family, e.g. _r4096")
     parser.add_argument("--store", default=str(STORE))
     return parser.parse_args()
 
@@ -25,7 +27,8 @@ def parse_args():
 def main():
     args = parse_args()
     task = get_task(args.task)
-    cells = sorted(Path(args.store, args.task).glob(f"*/{args.split}.jsonl"))
+    cells = [p for p in sorted(Path(args.store, args.task).glob(f"*/{args.split}.jsonl"))
+             if not args.match or args.match in p.parent.name]
     print(f"{args.task}/{args.split}: {len(cells)} cell(s)"
           + (f" (expected {args.expect})" if args.expect else ""))
     if not cells:
@@ -44,8 +47,8 @@ def main():
         print(f"{path.parent.name[:43]:<44}{len(rows):>6}{accuracy:>7.3f}"
               f"{sum(r['prediction'] is None for r in rows):>7}"
               f"{sum(r['finish_reason'] == 'length' for r in rows):>7}{responses:>6}  {','.join(missing) or '-'}")
-        if schema != 2:
-            problems.append(f"{path.parent.name}: record_schema={schema}, expected 2")
+        if schema != RECORD_SCHEMA:
+            problems.append(f"{path.parent.name}: record_schema={schema}, current is {RECORD_SCHEMA}")
         if responses < 5:
             problems.append(f"{path.parent.name}: only {responses} saved resample reasoning(s)")
         for row in rows:
