@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "Every Response Counts: Quantifying Uncertainty of LLM-based Multi-Agent Systems through Tensor Decomposition"
+message: "If you use MATU in your research, please cite the ACL 2026 paper."
+type: conference-paper
+authors:
+  - family-names: Chen
+    given-names: Tiejin
+  - family-names: Yao
+    given-names: Huaiyuan
+  - family-names: Chen
+    given-names: Jia
+  - family-names: Papalexakis
+    given-names: Evangelos E.
+  - family-names: Wei
+    given-names: Hua
+year: 2026
+conference: "The 64th Annual Meeting of the Association for Computational Linguistics"
+repository-code: "https://github.com/tiejin98/MATU"
+license: MIT

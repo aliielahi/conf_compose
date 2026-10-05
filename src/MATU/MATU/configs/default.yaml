@@ -1,0 +1,66 @@
+# Default MATU framework configuration.
+# Paths are examples and can be overridden by CLI flags, e.g.
+#   matu embed --config configs/default.yaml --logs path/to/logs.json
+
+embedding:
+  # Conversation log JSON following data/LOG_FORMAT.md.
+  logs: outputs/conversation_logs.json
+  # Directory where <role>_embedding_matrices.pkl files are written.
+  out_dir: outputs/embeddings
+  # Role names to extract from each turn in the log.
+  roles: [user, assistant]
+  # Default public embedding model used in the paper quick start.
+  model: Qwen/Qwen3-Embedding-0.6B
+  # Optional local Hugging Face cache/model directory.
+  cache_dir: null
+
+cp2:
+  # One embedding pickle per role/agent. Keys must overlap across files.
+  embeddings:
+    - outputs/embeddings/user_embedding_matrices.pkl
+    - outputs/embeddings/assistant_embedding_matrices.pkl
+  # Structured MATU output with rank-wise losses and scalar uncertainty.
+  out: outputs/matu_scores.pkl
+  # Optional legacy fit_dict output for compatibility with paper scripts.
+  legacy_fit_out: outputs/fit_dict.pkl
+  # Rank range used for PARAFAC2-style decomposition.
+  min_rank: 1
+  max_rank: 50
+  # ALS controls. Reduce max_rank/max_iter for smoke tests.
+  max_iter: 25
+  tol: 1.0e-6
+  # Random seed for factor initialization.
+  seed: 0
+  # interleave keeps each role/run as its own matrix; concat_steps stacks roles per run.
+  combine_mode: interleave
+  # Per-matrix L2 normalization before CP-2.
+  normalize: true
+
+fit:
+  # Accepts either structured MATU output or legacy fit_dict.
+  fit_dict: outputs/matu_scores.pkl
+  # Scalar uncertainty dict output.
+  out: outputs/uncertainty.pkl
+
+evaluation:
+  # Scalar uncertainty, structured MATU output, EigV output, or legacy fit_dict.
+  uncertainty: outputs/uncertainty.pkl
+  # accuracy_dict pickle: task id -> repeated-run correctness labels.
+  labels: outputs/accuracy_dict.pkl
+  # auto infers format; raw treats values as already uncertainty-like.
+  score_mode: auto
+  # any_incorrect matches the paper-style repeated-run error event.
+  error_rule: any_incorrect
+
+eigv:
+  # Conversation log JSON used for the NLI graph baseline.
+  logs: outputs/conversation_logs.json
+  out: outputs/eigv_final.pkl
+  # final uses final assistant answers; whole uses whole conversations.
+  mode: final
+  # NLI model used to estimate pairwise agreement.
+  model: roberta-large-mnli
+  # Eigenvalue aggregation mode.
+  score: sum
+  # Optional torch device, e.g. cuda or cpu. null auto-detects.
+  device: null

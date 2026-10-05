@@ -1,0 +1,7 @@
+{
+  "embedding_model": "Qwen/Qwen3-Embedding-0.6B",
+  "embedding_dim": 1024,
+  "roles": ["user", "assistant"],
+  "source": "embedding_matrices_qwen2.5_qwen3.pkl"
+}
+

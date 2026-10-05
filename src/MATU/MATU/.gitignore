@@ -1,0 +1,45 @@
+# Local secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+!quick_start/.env
+
+# Python build/test/cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Large generated research artifacts
+outputs/
+results/
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.safetensors
+*.npy
+*.npz
+!quick_start/data/
+!quick_start/data/*.json
+!quick_start/data/*.zip
+!quick_start/data/embedding_metadata.json
+!quick_start/results/
+!quick_start/results/**
+
+# Model and dataset caches
+.cache/
+huggingface/
+wandb/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

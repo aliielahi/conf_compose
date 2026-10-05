@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include CITATION.cff
+include requirements.txt
+include Makefile
+include Dockerfile
+include environment.yml
+include .dockerignore
+recursive-include configs *.yaml
+recursive-include data *.md
+recursive-include docs *.md
+recursive-include examples *.py

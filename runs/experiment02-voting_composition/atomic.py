@@ -2,10 +2,14 @@
 
 import argparse
 import csv
+import json
+import math
 import sys
+from itertools import combinations
 from pathlib import Path
 
 from conf_compose.composition import (candidate_set, from_zero_shot, majority_answer, pool_methods, support)
+from conf_compose.composition.evidence import Item, Stream
 from conf_compose.constants import RESULTS_DIR, TASKS
 from conf_compose.data import Example, get_task
 from conf_compose.pipelines.inference import STORE, InferenceSettings, inference_dir
@@ -20,6 +24,11 @@ def parse_args():
     parser.add_argument("--tasks", nargs="+", required=True, choices=sorted(TASKS))
     parser.add_argument("--group", nargs="+", required=True, help="the models that vote in this group")
     parser.add_argument("--samples", type=int, default=5)
+    parser.add_argument("--sizes", nargs="+", type=int)
+    parser.add_argument("--estimator", choices=("cons", "seq"), default="cons")
+    parser.add_argument("--context", choices=("direct", "reasoned"), default="direct")
+    parser.add_argument("--seq-score", choices=("norm_sum", "norm_mean"), default="norm_sum")
+    parser.add_argument("--match", default="", help="select saved cells by folder substring")
     parser.add_argument("--voter", type=int, default=0)
     parser.add_argument("--all-signals", action="store_true", default=True)
     parser.add_argument("--no-verbalized", action="store_true")
@@ -32,6 +41,15 @@ def cell_paths(task, args, split):
     """The group's inference cells; the flags must match the generation run or the digests will not resolve."""
     paths = {}
     for model in args.group:
+        if args.match:
+            tag = model.replace("/", "__")
+            matches = [p for p in Path(args.store, task).glob(f"{tag}--*/{split}.jsonl")
+                       if args.match in p.parent.name
+                       and f"s70v{args.voter}_k{args.samples}_" in p.parent.name]
+            if len(matches) != 1:
+                raise SystemExit(f"expected one cell for {task}/{model}, found {len(matches)}: {matches}")
+            paths[model] = matches[0]
+            continue
         settings = InferenceSettings(task=task, model=model, n_val=0, n_test=-1,
                                      answer_temperature=0.7, voter=args.voter,
                                      consistency_samples=args.samples,
@@ -43,6 +61,50 @@ def cell_paths(task, args, split):
                              f"check --samples/--voter/--no-verbalized match how it was generated")
         paths[inference_dir(settings, args.store).name] = path
     return paths
+
+
+def sequence_score(task, record, target, args):
+    candidates = (record.get("candidate_scores") or {}).get("candidates") or []
+    if target is None or not candidates:
+        return None
+    scores = []
+    selected = []
+    for candidate in candidates:
+        logs = (candidate.get(args.context) or {}).get("logprobs")
+        if not logs or not all(math.isfinite(v) for v in logs):
+            return None
+        value = sum(logs)
+        if args.seq_score == "norm_mean":
+            value /= len(logs)
+        scores.append(value)
+        selected.append(task.equivalent(candidate["answer"], target))
+    if not any(selected):
+        return None
+    top = max(scores)
+    weights = [math.exp(value - top) for value in scores]
+    return sum(w for w, match in zip(weights, selected) if match) / sum(weights)
+
+
+def load_records(paths):
+    return {model: {row["id"]: row for row in
+                    (json.loads(line) for line in path.read_text().splitlines() if line.strip())}
+            for model, path in paths.items()}
+
+
+def group_items(records, group):
+    shared = sorted(set.intersection(*(set(records[model]) for model in group)))
+    items = []
+    for example_id in shared:
+        first = records[group[0]][example_id]
+        streams = []
+        for agent, model in enumerate(group):
+            row = records[model][example_id]
+            if row["gold"] != first["gold"]:
+                raise ValueError(f"inconsistent gold for {example_id}")
+            streams.append(Stream(f"{example_id}:r0:a{agent}", agent, 0, model, row["prediction"],
+                                  row.get("sampled_answers", {}).get("consistency_t0.7", [])))
+        items.append(Item(example_id, first.get("question", ""), first["gold"], streams, first.get("options")))
+    return items
 
 
 def scored(values, labels, is_probability=True):
@@ -57,13 +119,19 @@ def scored(values, labels, is_probability=True):
     return out
 
 
-def run_task(task_name, args):
+def run_task(task_name, args, items=None, records=None):
     task = get_task(task_name)
-    items = from_zero_shot(cell_paths(task_name, args, "test"))
+    if items is None:
+        paths = cell_paths(task_name, args, "test")
+        items = from_zero_shot(paths)
+        records = load_records(paths) if args.estimator == "seq" else {}
+    if not items:
+        raise SystemExit(f"no shared examples for {task_name}")
     order = [s.model for s in sorted(items[0].round_streams((0,)), key=lambda s: s.agent)]
 
     own = {model: ([], []) for model in order}
-    vote_labels, pooled = [], {rule: [] for rule in RULES}
+    vote_labels, all_vote_labels, pooled = [], [], {rule: [] for rule in RULES}
+    all_own = {model: [] for model in order}
     agree = 0
     for item in items:
         streams = item.round_streams((0,))
@@ -71,19 +139,26 @@ def run_task(task_name, args):
         candidates = candidate_set(task, item, streams)
         supports = {s.model: support(task, s, candidates, args.samples) for s in streams}
 
+        def confidence(stream, target):
+            if args.estimator == "seq":
+                return sequence_score(task, records[stream.model][item.example_id], target, args)
+            return supports[stream.model].binary(target)
+
         for stream in streams:
+            all_own[stream.model].append(float(stream.answer is not None and task.is_correct(stream.answer, example)))
             if stream.answer is None:
                 continue
-            value = supports[stream.model].binary(stream.answer)
+            value = confidence(stream, stream.answer)
             if value is not None:
                 own[stream.model][0].append(value)
                 own[stream.model][1].append(float(task.is_correct(stream.answer, example)))
 
         target = majority_answer(task, streams)
+        all_vote_labels.append(float(target is not None and task.is_correct(target, example)))
         if target is None:
             continue
-        agree += len({a for a in (s.answer for s in streams) if a is not None}) == 1
-        scores = [supports[s.model].binary(target) for s in streams]
+        agree += all(s.answer is not None and task.equivalent(s.answer, target) for s in streams)
+        scores = [confidence(s, target) for s in streams]
         scores = [v for v in scores if v is not None]
         if len(scores) < len(streams):
             continue
@@ -93,12 +168,19 @@ def run_task(task_name, args):
                 pooled[rule].append(prediction.score)
 
     row = {"task": task_name, "n_models": len(order), "models": "|".join(_short(m) for m in order),
+           "estimator": args.estimator, "context": args.context if args.estimator == "seq" else "",
+           "seq_score": args.seq_score if args.estimator == "seq" else "",
+           "match": args.match, "voter": args.voter,
            "n_samples": args.samples, "n_examples": len(items), "n_voted": len(vote_labels),
            "unanimous": round(agree / len(items), 4) if items else None}
-    row["single_acc"] = _list(sum(l) / len(l) if l else None for _, l in (own[m] for m in order))
+    row["single_acc"] = _list(sum(all_own[m]) / len(items) for m in order)
+    row["single_coverage"] = _list(len(own[m][0]) / len(items) for m in order)
+    row["single_scored_acc"] = _list(sum(l) / len(l) if l else None for _, l in (own[m] for m in order))
     for metric in ("ece", "auarc", "auroc"):
         row[f"single_{metric}"] = _list(scored(v, l)[metric] for v, l in (own[m] for m in order))
-    row["vote_acc"] = round(sum(vote_labels) / len(vote_labels), 4) if vote_labels else None
+    row["vote_acc"] = _round(sum(all_vote_labels) / len(items))
+    row["vote_coverage"] = _round(len(vote_labels) / len(items))
+    row["vote_scored_acc"] = _round(sum(vote_labels) / len(vote_labels)) if vote_labels else None
     for rule in RULES:
         stats = scored(pooled[rule], vote_labels)
         for metric in ("ece", "auarc", "auroc", "brier", "nll"):
@@ -108,10 +190,30 @@ def run_task(task_name, args):
 
 def main():
     args = parse_args()
-    rows = [run_task(task, args) for task in args.tasks]
+    if len(set(args.group)) != len(args.group):
+        raise SystemExit("--group must contain distinct models")
+    if args.samples < 1 or any(s < 1 or s > len(args.group) for s in (args.sizes or [])):
+        raise SystemExit("invalid sample count or group size")
+    if args.estimator == "seq" and not args.match:
+        raise SystemExit("--estimator seq requires --match to select candidate-scored cells")
+    rows = []
+    for task_name in args.tasks:
+        paths = cell_paths(task_name, args, "test")
+        records = load_records(paths)
+        groups = [tuple(paths)] if not args.sizes else [group for size in dict.fromkeys(args.sizes)
+                                                       for group in combinations(paths, size)]
+        for group in groups:
+            items = group_items(records, group)
+            rows.append(run_task(task_name, args, items, records))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     exists = out.exists()
+    if exists and out.stat().st_size:
+        with out.open(newline="") as handle:
+            if next(csv.reader(handle)) != list(rows[0]):
+                raise SystemExit(f"CSV columns differ; choose a new --out path: {out}")
+    else:
+        exists = False
     with out.open("a", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         if not exists:
