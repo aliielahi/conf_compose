@@ -40,16 +40,25 @@ Back them up with `rsync`, not `git`.
 ## One-time setup on a fresh machine
 
 ```bash
-# 1. Docker onto the big disk (the 39 GB root cannot hold a vLLM image)
+# 1. Docker onto the big disk (the 39 GB root cannot hold a vLLM image).
+# /mnt/data is virtiofs on GPU1, so overlay2 cannot mount there; use fuse-overlayfs.
+sudo apt-get update && sudo apt-get install -y fuse-overlayfs
 sudo systemctl stop docker docker.socket      # the socket matters: it restarts the service
 sudo mkdir -p /mnt/data/docker
-sudo rsync -a /var/lib/docker/ /mnt/data/docker/
-echo '{"data-root": "/mnt/data/docker"}' | sudo tee /etc/docker/daemon.json
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+{
+  "data-root": "/mnt/data/docker",
+  "storage-driver": "fuse-overlayfs",
+  "features": { "containerd-snapshotter": false }
+}
+EOF
 sudo systemctl start docker
-docker info | grep "Docker Root Dir"          # must print /mnt/data/docker
+docker info | grep -E "Docker Root Dir|Storage Driver"
+# must print /mnt/data/docker and fuse-overlayfs
 
 # 2. model cache onto the big disk too
-mkdir -p /mnt/data/hf-cache
+sudo mkdir -p /mnt/data/hf-cache
+sudo chown "$USER":"$USER" /mnt/data/hf-cache
 echo 'export HF_CACHE=/mnt/data/hf-cache' >> ~/.bashrc
 export HF_CACHE=/mnt/data/hf-cache
 
@@ -77,16 +86,16 @@ bash docker.sh down         # remove the container; results and cache are on the
 `up` prints a verification block. **All five lines must be right before running anything:**
 
 ```
-nvcc ... release 12.4           <- CUDA compiler present
+nvcc ... release 13.0           <- matches torch CUDA below
 gcc (Ubuntu 11.4.0) 11.4.0      <- C compiler present
-torch 2.x cuda 12.4 gpus 1 | vllm 0.x
+torch 2.x cuda 13.0 gpus 1 | vllm 0.x
 conf_compose ok
 HF_TOKEN set: True
 ```
 
 ## Why the image is built the way it is
 
-The base is `nvidia/cuda:12.4.1-devel-ubuntu22.04`. **devel, not runtime** — this is the single most
+The base is `nvidia/cuda:13.0.0-devel-ubuntu22.04`. **devel, not runtime** — this is the single most
 important detail. A runtime base has the driver and torch binaries but no toolchain, and then:
 
 - `torch.compile` fails with *Failed to find C compiler* during kernel warmup
@@ -95,6 +104,11 @@ important detail. A runtime base has the driver and torch binaries but no toolch
 Both appear only once a model starts loading, minutes into a run, which makes them expensive to
 discover. Shell workarounds (`export VLLM_USE_FLASHINFER_SAMPLER=0`) do not survive a new
 `docker exec`, so the fix belongs in the image.
+
+The CUDA compiler must also match the CUDA version bundled with PyTorch. On GPU1, the old
+CUDA 12.4 image installed a CUDA 13.0 PyTorch wheel; FlashInfer then failed during model
+warmup with `nvcc fatal: Unknown option '--compress-mode=size'`. The build now checks the
+two versions and fails early if package updates make them diverge.
 
 Container flags that matter, all set by `docker.sh up`:
 
@@ -170,5 +184,7 @@ single-token probe. Handled by `CHAT_TEMPLATE_KWARGS` and `GENERATION_PREFIX` in
 | `Could not find nvcc` | runtime base, no CUDA toolkit | devel base |
 | `is a gated dataset` / 401 on a model | no HF_TOKEN | `.env` plus `--env-file` |
 | `[Errno 28] No space left on device` | 39 GB root | Docker data-root on `/mnt/data` |
+| `failed to mount overlay: invalid argument` | `/mnt/data` is virtiofs | use `fuse-overlayfs` and disable the containerd snapshotter |
+| `nvcc fatal: Unknown option '--compress-mode=size'` | CUDA 12.4 compiler with CUDA 13.0 PyTorch/FlashInfer | rebuild from the CUDA 13.0 Dockerfile |
 | `pull access denied for conf_compose` | image not built | `bash docker.sh build` |
 | engine core init fails, no clear reason | 64 MB `/dev/shm` | `--shm-size=32g --ipc=host` |

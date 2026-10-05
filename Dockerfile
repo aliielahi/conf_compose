@@ -1,6 +1,6 @@
-# GPU image for conf_compose. A -devel CUDA base ships nvcc and gcc, which vLLM's
-# torch.compile and FlashInfer both JIT against; a -runtime base does not.
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+# GPU image for conf_compose. Match nvcc to the CUDA version of the PyTorch wheel:
+# FlashInfer JIT compilation uses nvcc flags that CUDA 12.4 does not recognize.
+FROM nvidia/cuda:13.0.0-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CUDA_HOME=/usr/local/cuda \
@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir --upgrade pip \
         torch "transformers>=4.56" accelerate vllm \
         numpy tqdm datasets math-verify python-dotenv pytest \
         matplotlib pandas
+
+# Catch a future wheel/toolkit mismatch during the build, before model startup.
+RUN python -c 'import re, subprocess, torch; nvcc = subprocess.check_output(["nvcc", "--version"], text=True); toolkit = re.search(r"release (\d+\.\d+)", nvcc).group(1); wheel = torch.version.cuda; print(f"nvcc CUDA {toolkit}; torch CUDA {wheel}"); assert toolkit == wheel, f"nvcc CUDA {toolkit} != torch CUDA {wheel}"'
 
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
