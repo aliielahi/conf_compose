@@ -10,6 +10,26 @@ pooling many agents' confidence signals.
 - `runs/experiment*/` — one experiment each, consuming the inference store and writing to `results/<same name>/`.
 - `tests/` — regression tests over `src`.
 
+## gpu environment
+
+The image is built on a **-devel** CUDA base so `nvcc` and `gcc` are present: vLLM's `torch.compile` needs a C
+compiler and FlashInfer JIT-builds its sampler against `nvcc`. A `-runtime` base silently lacks both and fails
+only once a model starts loading.
+
+```bash
+cp .env.example .env     # set HF_TOKEN; gpqa, gemma and llama are gated and fail without it
+bash docker.sh build     # ~10-15 min, mostly the vLLM wheel
+bash docker.sh up        # mounts this folder as /workspace, then prints a verification block
+bash docker.sh shell     # or the usual: docker exec -it conf_compose bash
+```
+
+`up` mounts `$PWD` to `/workspace` and `~/.cache/huggingface` into the container, sets `--shm-size=32g
+--ipc=host`, loads `.env`, and installs the package with `--no-deps`. Check all five lines of its output before
+running anything, in particular `HF_TOKEN set: True`.
+
+`results/` and `cache/` live on the host through the mount, so they survive `docker.sh down` and any rebuild,
+and model weights download once into the host Hugging Face cache.
+
 ## inference store
 
 Every model output lives once in `results/inferences/<task>/<model>--<decoding>--<digest>/`. The digest covers
