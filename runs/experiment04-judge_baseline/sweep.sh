@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Overnight judge sweep: 15 panels x datasets x 2 judges x (reasoning control + 2 confidence estimators).
+# Judge sweep: 15 panels x datasets x 2 judges x (reasoning control + 2 confidence estimators).
 # Detaches itself, so closing the laptop or dropping ssh cannot kill it.
 # One judge per process, because two vLLM engines cannot share one GPU at 0.7 utilisation each.
 # Datasets run cheapest first; rerunning redoes only cells that are missing or from an older context window.
 # Everything for this experiment lands in logs/experiment04-judge_baseline/:
 #   current_run.log   progress, ETA, crashes and a summary per launch      run.log   detached stdout
 #   <judge>.log       full stdout of one judge's process                   run.pid   for stop    DONE   on finish
-# Usage: bash runs/experiment04-judge_baseline/overnight.sh          start, detached
-#        bash runs/experiment04-judge_baseline/overnight.sh stop     stop a running sweep
+# Usage: bash runs/experiment04-judge_baseline/sweep.sh          start, detached
+#        bash runs/experiment04-judge_baseline/sweep.sh stop     stop a running sweep
 #   TASKS="gpqa csqa"   JUDGES="vllm/g3-27i"   SIZES="2 3"   FORCE=1 redo complete cells
 #   EXTRA="--dry-run" print the plan       EXTRA="--no-control" drop the control arm      FOREGROUND=1
 set -uo pipefail
@@ -65,7 +65,7 @@ if [ -z "${SWEEP_DETACHED:-}" ] && [ "${FOREGROUND:-0}" != "1" ]; then
   echo "  progress : tail -f $RUN_LOG"
   echo "  stdout   : tail -f $LOG_DIR/run.log"
   echo "  finished : cat $LOG_DIR/DONE"
-  echo "  stop     : bash runs/experiment04-judge_baseline/overnight.sh stop"
+  echo "  stop     : bash runs/experiment04-judge_baseline/sweep.sh stop"
   exit 0
 fi
 
@@ -73,7 +73,7 @@ echo "$$ $(ps -o pgid= -p $$ | tr -d ' ')" > "$PIDFILE"
 trap 'note "SHELL    received a signal, exiting"; echo stopped > "$LOG_DIR/DONE"; rm -f "$PIDFILE"; exit 143' INT TERM
 
 note "$(printf '=%.0s' {1..78})"
-note "SHELL    overnight.sh starting (pid $$): judges=$JUDGES tasks=$TASKS"
+note "SHELL    sweep.sh starting (pid $$): judges=$JUDGES tasks=$TASKS"
 
 STATUS=0
 for JUDGE in $JUDGES; do
@@ -92,7 +92,7 @@ for JUDGE in $JUDGES; do
   fi
 done
 
-note "SHELL    overnight.sh done (worst exit code $STATUS)"
+note "SHELL    sweep.sh done (worst exit code $STATUS)"
 [ "$STATUS" -eq 0 ] && echo ok > "$LOG_DIR/DONE" || echo "failed $STATUS" > "$LOG_DIR/DONE"
 rm -f "$PIDFILE"
 exit "$STATUS"
