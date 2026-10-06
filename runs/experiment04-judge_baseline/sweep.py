@@ -3,7 +3,10 @@
 import argparse
 import csv
 import importlib.util
+import time
+import traceback
 from argparse import Namespace
+from datetime import datetime
 from pathlib import Path
 
 from conf_compose.constants import RESULTS_DIR
@@ -53,6 +56,8 @@ def parse_args():
     parser.add_argument("--limit", type=int, help="first N examples; omit for the whole split")
     parser.add_argument("--word-limit", type=int, default=150)
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--log", default="logs/current_run.log",
+                        help="one running account of the whole sweep, appended to across launches")
     parser.add_argument("--force", action="store_true", help="redo runs already on disk")
     parser.add_argument("--dry-run", action="store_true", help="list the plan and exit")
     parser.add_argument("--store", default=str(STORE))
@@ -76,13 +81,45 @@ def case(args, judge, task, panel, view, method):
                         "view": view, "confidence_method": method})
 
 
+def log(path, message):
+    """One timestamped line, closed each time, so a kill -9 cannot lose what already happened."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        handle.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {message}\n")
+
+
+def summarise(path, args, pending, rows, failures, started):
+    """Everything this launch did, appended whether it finished, crashed or was interrupted."""
+    elapsed = time.time() - started
+    lines = [f"SUMMARY  {len(rows)} ok, {len(failures)} failed, {len(pending) - len(rows) - len(failures)} "
+             f"not reached, of {len(pending)} planned in {elapsed / 3600:.2f}h"]
+    for task in args.tasks:
+        done = [r for r in rows if r["task"] == task]
+        if done:
+            lines.append(f"  {task:<12}{len(done):>4} run(s)   "
+                         f"mean majority_acc {sum(r['majority_acc'] for r in done) / len(done):.3f}")
+    for shown in ["none"] + list(args.methods):
+        arm = [r for r in rows if r["shown_confidence"] == shown and r.get("verbalized_auroc")]
+        if arm:
+            lines.append(f"  shown={shown:<22}{len(arm):>4} run(s)   "
+                         f"mean auroc {sum(r['verbalized_auroc'] for r in arm) / len(arm):.3f}   "
+                         f"mean ece {sum(r['verbalized_ece'] for r in arm) / len(arm):.3f}")
+    for label, error in failures:
+        lines.append(f"  FAILED  {label}: {error}")
+    for line in lines:
+        print(line)
+    log(path, "\n".join(lines) + f"\n{'-' * 78}")
+
+
 def main():
     args = parse_args()
     work = plan(args)
-    out = Path(args.out_dir)
+    out, logfile = Path(args.out_dir), Path(args.log)
     pending = [c for c in work
                if args.force or not (out / c[1] / jrun._cell(case(args, *c)) / "verdicts.jsonl").exists()]
-    print(f"{len(work)} run(s) planned, {len(work) - len(pending)} already on disk, {len(pending)} to go")
+    header = (f"{len(work)} run(s) planned, {len(work) - len(pending)} already on disk, "
+              f"{len(pending)} to go")
+    print(header)
     print(f"judges={len(args.judges)} tasks={len(args.tasks)} panels={len(set(map(str, [c[2] for c in work])))} "
           f"arms={'' if args.no_control else 'control+'}{len(args.methods)} method(s)")
     if args.dry_run or not pending:
@@ -90,25 +127,56 @@ def main():
             print(f"  {judge:<14}{task:<12}{'+'.join(panel):<46}{view:<22}{method}")
         return
 
+    log(logfile, f"{'=' * 78}\nLAUNCH   judges={','.join(args.judges)} tasks={','.join(args.tasks)} "
+                 f"methods={','.join(args.methods)} limit={args.limit or 'full'}\n         {header}")
     out.mkdir(parents=True, exist_ok=True)
-    rows, done = [], 0
-    for judge in args.judges:
-        batch = [c for c in pending if c[0] == judge]
-        if not batch:
-            continue
-        print(f"\n{'#' * 78}\n# loading judge {judge} for {len(batch)} run(s)\n{'#' * 78}")
-        llm = load_model(judge)
-        for judge_name, task, panel, view, method in batch:
-            done += 1
-            print(f"\n{'=' * 78}\n[{done}/{len(pending)}] {judge_name} {task} "
-                  f"{'+'.join(panel)} {view} {method}")
+    rows, failures, done, started = [], [], 0, time.time()
+    try:
+        for judge in args.judges:
+            batch = [c for c in pending if c[0] == judge]
+            if not batch:
+                continue
+            print(f"\n{'#' * 78}\n# loading judge {judge} for {len(batch)} run(s)\n{'#' * 78}")
+            log(logfile, f"JUDGE    {judge}: loading for {len(batch)} run(s)")
             try:
-                rows.append(jrun.judge_once(case(args, judge_name, task, panel, view, method), llm))
-            except SystemExit as error:
-                print(f"SKIPPED: {error}")
-            write(out / "summary.csv", rows)
-        del llm
-    print(f"\n{len(rows)}/{len(pending)} run(s) completed -> {out / 'summary.csv'}")
+                llm = load_model(judge)
+            except Exception as error:
+                log(logfile, f"FATAL    {judge} failed to load: {type(error).__name__}: {error}")
+                failures.append((judge, f"load failed: {error}"))
+                traceback.print_exc()
+                continue
+            for judge_name, task, panel, view, method in batch:
+                done += 1
+                label = f"{judge_name} {task} {'+'.join(panel)} {view} {method}"
+                print(f"\n{'=' * 78}\n[{done}/{len(pending)}] {label}")
+                log(logfile, f"START    [{done}/{len(pending)}] {label}")
+                clock = time.time()
+                try:
+                    row = jrun.judge_once(case(args, judge_name, task, panel, view, method), llm)
+                    rows.append(row)
+                    log(logfile, f"OK       [{done}/{len(pending)}] n={row['n']} "
+                                 f"acc={row['majority_acc']:.3f} "
+                                 f"auroc={row.get('verbalized_auroc', float('nan')):.3f} "
+                                 f"ece={row.get('verbalized_ece', float('nan')):.3f} "
+                                 f"{time.time() - clock:.0f}s")
+                except SystemExit as error:
+                    print(f"SKIPPED: {error}")
+                    failures.append((label, f"skipped: {error}"))
+                    log(logfile, f"SKIP     [{done}/{len(pending)}] {error}")
+                except Exception as error:
+                    print(f"CRASHED: {type(error).__name__}: {error}")
+                    traceback.print_exc()
+                    failures.append((label, f"{type(error).__name__}: {error}"))
+                    log(logfile, f"CRASH    [{done}/{len(pending)}] {type(error).__name__}: {error}\n"
+                                 + traceback.format_exc().rstrip())
+                write(out / "summary.csv", rows)
+            del llm
+    except KeyboardInterrupt:
+        log(logfile, "STOPPED  interrupted by the user")
+        print("\ninterrupted")
+    finally:
+        summarise(logfile, args, pending, rows, failures, started)
+        print(f"summary.csv -> {out / 'summary.csv'}   log -> {logfile}")
 
 
 def write(path, rows):
