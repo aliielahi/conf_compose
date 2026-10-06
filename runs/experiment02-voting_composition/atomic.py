@@ -1,28 +1,32 @@
-"""One CSV row per (dataset, model group): each member's own-answer baseline beside the group's vote."""
-
 import argparse
 import csv
+import hashlib
 import json
 import math
 import sys
 from itertools import combinations
 from pathlib import Path
 
-from conf_compose.composition import (candidate_set, from_zero_shot, majority_answer, pool_methods, support)
+import numpy as np
+
+from conf_compose.composition import (candidate_set, majority_answer, pool_methods, support)
 from conf_compose.composition.evidence import Item, Stream
+from conf_compose.composition.pooling import LEARNED_FITTERS, RULES
 from conf_compose.constants import RESULTS_DIR, TASKS
 from conf_compose.data import Example, get_task
 from conf_compose.pipelines.inference import STORE, InferenceSettings, inference_dir
 from conf_compose.utils.metrics import auarc, auroc, brier, ece, nll
 
-RULES = ("mean", "logodds_sum", "logodds_mean")
 METRICS = ("ece", "auarc", "auroc", "brier", "nll")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Atomic voting confidence with fixed and fitted pooling rules")
     parser.add_argument("--tasks", nargs="+", required=True, choices=sorted(TASKS))
     parser.add_argument("--group", nargs="+", required=True, help="the models that vote in this group")
+    parser.add_argument("--fit-fraction", type=float, default=0.3, help="fraction of saved test questions reserved for fitting")
+    parser.add_argument("--fit-seed", type=int, default=0)
+    parser.add_argument("--fit-split", choices=("holdout", "validation"), default="holdout")
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--sizes", nargs="+", type=int)
     parser.add_argument("--estimator", choices=("cons", "seq"), default="cons")
@@ -33,12 +37,11 @@ def parse_args():
     parser.add_argument("--all-signals", action="store_true", default=True)
     parser.add_argument("--no-verbalized", action="store_true")
     parser.add_argument("--store", default=str(STORE))
-    parser.add_argument("--out", default=str(RESULTS_DIR / "voting_atomic" / "atomic.csv"))
+    parser.add_argument("--out", default=str(RESULTS_DIR / "voting_atomic" / "atomic_learned.csv"))
     return parser.parse_args()
 
 
 def cell_paths(task, args, split):
-    """The group's inference cells; the flags must match the generation run or the digests will not resolve."""
     paths = {}
     for model in args.group:
         if args.match:
@@ -59,7 +62,7 @@ def cell_paths(task, args, split):
         if not path.exists():
             raise SystemExit(f"missing inference cell:\n  {path}\n"
                              f"check --samples/--voter/--no-verbalized match how it was generated")
-        paths[inference_dir(settings, args.store).name] = path
+        paths[model] = path
     return paths
 
 
@@ -86,9 +89,21 @@ def sequence_score(task, record, target, args):
 
 
 def load_records(paths):
-    return {model: {row["id"]: row for row in
-                    (json.loads(line) for line in path.read_text().splitlines() if line.strip())}
-            for model, path in paths.items()}
+    records = {}
+    for model, path in paths.items():
+        rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        records[model] = {row["id"]: row for row in rows}
+        if len(records[model]) != len(rows):
+            raise ValueError(f"duplicate question IDs in {path}")
+    return records
+
+
+def validation_records(paths):
+    validation_paths = {model: path.with_name("validation.jsonl") for model, path in paths.items()}
+    missing = [str(path) for path in validation_paths.values() if not path.is_file()]
+    if missing:
+        raise ValueError(f"validation records missing from selected inference cells: {missing}")
+    return load_records(validation_paths)
 
 
 def group_items(records, group):
@@ -107,84 +122,153 @@ def group_items(records, group):
     return items
 
 
-def scored(values, labels, is_probability=True):
-    """Every metric we can report for one score series, on the examples where it exists."""
-    if len(values) < 10 or not 0 < sum(labels) < len(labels):
-        return {m: None for m in METRICS}
-    out = {"auroc": auroc(values, labels), "auarc": auarc(values, labels)}
-    if is_probability:
-        out.update({"ece": ece(values, labels), "brier": brier(values, labels), "nll": nll(values, labels)})
-    else:
-        out.update({"ece": None, "brier": None, "nll": None})
-    return out
+def scored(values, labels, ranking=None):
+    if not values:
+        return {metric: None for metric in METRICS}
+    ranking = values if ranking is None else ranking
+    result = {"auroc": auroc(ranking, labels), "auarc": auarc(ranking, labels),
+              "ece": ece(values, labels), "brier": brier(values, labels), "nll": nll(values, labels)}
+    return {key: value if math.isfinite(value) else None for key, value in result.items()}
 
 
-def run_task(task_name, args, items=None, records=None):
+def split_items(task_name, items, fraction, seed):
+    if not 0 < fraction < 1:
+        raise ValueError("--fit-fraction must be between zero and one")
+    fitting, evaluation = [], []
+    for item in items:
+        key = json.dumps([task_name, seed, item.example_id]).encode()
+        position = int.from_bytes(hashlib.sha256(key).digest()[:8], "big") / 2**64
+        (fitting if position < fraction else evaluation).append(item)
+    if not fitting or not evaluation:
+        raise ValueError("the holdout needs fitting and evaluation questions; change --fit-fraction or supply validation")
+    return fitting, evaluation
+
+
+def confidence_scores(task, item, args, records):
+    streams = item.round_streams((0,))
+    candidates = candidate_set(task, item, streams)
+    supports = {stream.model: support(task, stream, candidates, args.samples) for stream in streams}
+
+    def confidence(stream, target):
+        if args.estimator == "seq":
+            return sequence_score(task, records[stream.model][item.example_id], target, args)
+        if len(stream.samples) < args.samples:
+            return None
+        return supports[stream.model].binary(target)
+
+    target = majority_answer(task, streams)
+    own = [confidence(stream, stream.answer) for stream in streams]
+    shared = [confidence(stream, target) for stream in streams]
+    return target, own, shared
+
+
+def id_digest(ids):
+    return hashlib.sha256(json.dumps(sorted(ids), separators=(",", ":")).encode()).hexdigest()
+
+
+def run_task(task_name, args, items=None, records=None, fitting=None, fitting_records=None):
     task = get_task(task_name)
     if items is None:
         paths = cell_paths(task_name, args, "test")
-        items = from_zero_shot(paths)
-        records = load_records(paths) if args.estimator == "seq" else {}
+        records = load_records(paths)
+        items = group_items(records, tuple(records))
+        if args.fit_split == "validation" and fitting is None:
+            fitting_records = validation_records(paths)
+            fitting = group_items(fitting_records, tuple(records))
     if not items:
-        raise SystemExit(f"no shared examples for {task_name}")
-    order = [s.model for s in sorted(items[0].round_streams((0,)), key=lambda s: s.agent)]
+        raise ValueError(f"no shared examples for {task_name}")
+    n_total = len(items)
+    if fitting is None:
+        if args.fit_split != "holdout":
+            raise ValueError("validation fitting requires separate validation records")
+        fitting, items = split_items(task_name, items, args.fit_fraction, args.fit_seed)
+        fitting_records = records
+    if not fitting:
+        raise ValueError("no shared fitting questions")
+    fitting_records = records if fitting_records is None else fitting_records
+    fit_ids = {item.example_id for item in fitting}
+    eval_ids = {item.example_id for item in items}
+    if fit_ids & eval_ids:
+        raise ValueError("fitting and evaluation question IDs overlap")
+    order = [stream.model for stream in items[0].round_streams((0,))]
+    for item in [*fitting, *items]:
+        if [stream.model for stream in item.round_streams((0,))] != order:
+            raise ValueError("fitting and evaluation must have the same ordered streams")
+
+    fit_scores, fit_labels, scored_fit_ids = [], [], []
+    for item in fitting:
+        target, _, scores = confidence_scores(task, item, args, fitting_records)
+        if target is not None and all(value is not None for value in scores):
+            fit_scores.append(scores)
+            fit_labels.append(float(task.is_correct(target, Example(item.example_id, item.question, item.gold))))
+            scored_fit_ids.append(item.example_id)
+    matrix = np.asarray(fit_scores, dtype=float).reshape(-1, len(order))
+    fitted = {name: fit(matrix, fit_labels) for name, fit in LEARNED_FITTERS.items()}
 
     own = {model: ([], []) for model in order}
-    vote_labels, all_vote_labels, pooled = [], [], {rule: [] for rule in RULES}
     all_own = {model: [] for model in order}
+    vote_labels, all_vote_labels, scored_eval_ids = [], [], []
+    pooled = {rule: [] for rule in RULES}
+    ranks = {rule: [] for rule in RULES}
     agree = 0
     for item in items:
         streams = item.round_streams((0,))
         example = Example(item.example_id, item.question, item.gold)
-        candidates = candidate_set(task, item, streams)
-        supports = {s.model: support(task, s, candidates, args.samples) for s in streams}
-
-        def confidence(stream, target):
-            if args.estimator == "seq":
-                return sequence_score(task, records[stream.model][item.example_id], target, args)
-            return supports[stream.model].binary(target)
-
-        for stream in streams:
-            all_own[stream.model].append(float(stream.answer is not None and task.is_correct(stream.answer, example)))
-            if stream.answer is None:
-                continue
-            value = confidence(stream, stream.answer)
+        target, own_scores, scores = confidence_scores(task, item, args, records)
+        for stream, value in zip(streams, own_scores):
+            correct = float(stream.answer is not None and task.is_correct(stream.answer, example))
+            all_own[stream.model].append(correct)
             if value is not None:
                 own[stream.model][0].append(value)
-                own[stream.model][1].append(float(task.is_correct(stream.answer, example)))
+                own[stream.model][1].append(correct)
 
-        target = majority_answer(task, streams)
-        all_vote_labels.append(float(target is not None and task.is_correct(target, example)))
+        correct = float(target is not None and task.is_correct(target, example))
+        all_vote_labels.append(correct)
         if target is None:
             continue
-        agree += all(s.answer is not None and task.equivalent(s.answer, target) for s in streams)
-        scores = [confidence(s, target) for s in streams]
-        scores = [v for v in scores if v is not None]
-        if len(scores) < len(streams):
+        agree += all(stream.answer is not None and task.equivalent(stream.answer, target) for stream in streams)
+        if any(value is None for value in scores):
             continue
-        vote_labels.append(float(task.is_correct(target, example)))
-        for rule, prediction in pool_methods(scores).items():
-            if rule in RULES:
+        vote_labels.append(correct)
+        scored_eval_ids.append(item.example_id)
+        predictions = pool_methods(scores)
+        predictions.update({name: fit.predict(scores) for name, fit in fitted.items()})
+        for rule, prediction in predictions.items():
+            if prediction.score is not None:
                 pooled[rule].append(prediction.score)
+                ranks[rule].append(prediction.logit if prediction.logit is not None else prediction.score)
 
-    row = {"task": task_name, "n_models": len(order), "models": "|".join(_short(m) for m in order),
-           "estimator": args.estimator, "context": args.context if args.estimator == "seq" else "",
+    row = {"task": task_name, "n_models": len(order), "models": "|".join(_short(model) for model in order),
+           "model_ids": json.dumps(order), "estimator": args.estimator,
+           "context": args.context if args.estimator == "seq" else "",
            "seq_score": args.seq_score if args.estimator == "seq" else "",
-           "match": args.match, "voter": args.voter,
-           "n_samples": args.samples, "n_examples": len(items), "n_voted": len(vote_labels),
-           "unanimous": round(agree / len(items), 4) if items else None}
-    row["single_acc"] = _list(sum(all_own[m]) / len(items) for m in order)
-    row["single_coverage"] = _list(len(own[m][0]) / len(items) for m in order)
-    row["single_scored_acc"] = _list(sum(l) / len(l) if l else None for _, l in (own[m] for m in order))
-    for metric in ("ece", "auarc", "auroc"):
-        row[f"single_{metric}"] = _list(scored(v, l)[metric] for v, l in (own[m] for m in order))
+           "match": args.match, "voter": args.voter, "n_samples": args.samples,
+           "n_total": n_total, "n_examples": len(items), "n_voted": len(vote_labels),
+           "fit_split": args.fit_split,
+           "fit_fraction": args.fit_fraction if args.fit_split == "holdout" else None,
+           "fit_seed": args.fit_seed if args.fit_split == "holdout" else None,
+           "n_fit_questions": len(fitting), "n_fit_scored": len(fit_labels),
+           "n_fit_errors": len(fit_labels) - int(sum(fit_labels)),
+           "fit_ids_hash": id_digest(fit_ids), "eval_ids_hash": id_digest(eval_ids),
+           "fit_scored_ids_hash": id_digest(scored_fit_ids), "eval_scored_ids_hash": id_digest(scored_eval_ids),
+           "unanimous": _round(agree / len(items))}
+    row["single_acc"] = _list(sum(all_own[model]) / len(items) for model in order)
+    row["single_coverage"] = _list(len(own[model][0]) / len(items) for model in order)
+    row["single_scored_acc"] = _list(sum(labels) / len(labels) if labels else None for _, labels in own.values())
+    for metric in METRICS:
+        row[f"single_{metric}"] = _list(scored(values, labels)[metric] for values, labels in own.values())
     row["vote_acc"] = _round(sum(all_vote_labels) / len(items))
     row["vote_coverage"] = _round(len(vote_labels) / len(items))
     row["vote_scored_acc"] = _round(sum(vote_labels) / len(vote_labels)) if vote_labels else None
     for rule in RULES:
-        stats = scored(pooled[rule], vote_labels)
-        for metric in ("ece", "auarc", "auroc", "brier", "nll"):
+        stats = scored(pooled[rule], vote_labels, ranks[rule])
+        for metric in METRICS:
             row[f"{rule}_{metric}"] = _round(stats[metric])
+        row[f"{rule}_coverage"] = _round(len(pooled[rule]) / len(items))
+    for name, fit in fitted.items():
+        row[f"{name}_status"] = fit.status
+        row[f"{name}_scale"] = fit.scale
+        row[f"{name}_parameters"] = json.dumps(fit.parameters, sort_keys=True)
     return row
 
 
@@ -196,15 +280,21 @@ def main():
         raise SystemExit("invalid sample count or group size")
     if args.estimator == "seq" and not args.match:
         raise SystemExit("--estimator seq requires --match to select candidate-scored cells")
+    if not 0 < args.fit_fraction < 1:
+        raise SystemExit("--fit-fraction must be between zero and one")
     rows = []
     for task_name in args.tasks:
         paths = cell_paths(task_name, args, "test")
         records = load_records(paths)
+        fitting_records = validation_records(paths) if args.fit_split == "validation" else None
         groups = [tuple(paths)] if not args.sizes else [group for size in dict.fromkeys(args.sizes)
                                                        for group in combinations(paths, size)]
         for group in groups:
             items = group_items(records, group)
-            rows.append(run_task(task_name, args, items, records))
+            fitting = group_items(fitting_records, group) if fitting_records is not None else None
+            if fitting is not None and not fitting:
+                raise SystemExit(f"no shared validation questions for {task_name}/{group}")
+            rows.append(run_task(task_name, args, items, records, fitting, fitting_records))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     exists = out.exists()
@@ -219,9 +309,9 @@ def main():
         if not exists:
             writer.writeheader()
         writer.writerows(rows)
-    print(",".join(rows[0]))
-    for row in rows:
-        print(",".join("" if v is None else str(v) for v in row.values()))
+    writer = csv.DictWriter(sys.stdout, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
     print(f"\nappended {len(rows)} row(s) to {out}", file=sys.stderr)
 
 

@@ -9,9 +9,12 @@ TASK = get_task("csqa")
 
 
 class FakeGeneration:
-    def __init__(self, text, top_logprobs=None):
+    def __init__(self, text, top_logprobs=None, finish_reason="stop"):
         self.text = text
         self.top_logprobs = top_logprobs
+        self.finish_reason = finish_reason
+        self.input_tokens = 100
+        self.output_tokens = 20
         self.ok = True
 
 
@@ -128,6 +131,36 @@ def main():
     none = [PanelView("csqa-test-1", "q?", "B", [PanelEntry("model0", None, "r", None)], None)]
     verdict = Judge(FakeLLM(), TASK, JudgeConfig()).run(none)[0]
     assert verdict.ptrue is None and verdict.seqprob is None
+
+    # The judge's own rating is the last labelled one, not a member confidence it quoted on the way.
+    quoting = ("Model A's confidence: 0.9 and Model B answered with confidence 0.95.\n"
+               "Justification: only one chain is sound.\n**Confidence:** 6")
+    verdict = Judge(FakeLLM(quoting), TASK, JudgeConfig(modes=("verbalized",))).run(views(1))[0]
+    assert verdict.verbalized == 0.6, verdict.verbalized
+    assert verdict.justification == "only one chain is sound."
+
+    # finish_reason and token counts are saved, so truncation is never invisible again.
+    row = Judge(FakeLLM(), TASK, JudgeConfig(modes=("verbalized",))).run(views(1))[0].to_dict()
+    assert row["finish_reason"] == "stop" and row["prompt_tokens"] == 100 and row["output_tokens"] == 20
+
+    # A prompt that cannot fit the window is refused before any generation, never truncated.
+    class Tight(FakeLLM):
+        def render(self, system, messages):
+            return messages[0]["content"]
+
+        def encode(self, texts):
+            return {"input_ids": [[0] * len(text) for text in texts]}
+
+    tight = Tight()
+    try:
+        Judge(tight, TASK, JudgeConfig(modes=("verbalized",), context=600, max_tokens=512)).run(views(2))
+    except ValueError as error:
+        assert "exceed 88 tokens" in str(error), error
+        assert tight.generations == 0, "nothing may be generated once a prompt is known to overflow"
+    else:
+        raise AssertionError("an overflowing prompt must be refused")
+    roomy = Judge(Tight(), TASK, JudgeConfig(modes=("verbalized",), context=32768)).run(views(2))
+    assert all(v.verbalized == 0.8 for v in roomy)
 
     # Missing confidences are shown as unavailable rather than silently dropped.
     llm = FakeLLM()

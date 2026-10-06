@@ -63,3 +63,55 @@ To enumerate all groups, list the available models and request `--sizes 2 3 4 5`
 **each subset its own majority**, rather than the legacy report's majority across all loaded voters.
 With seven models this yields 112 groups per dataset. To run one chosen group, list exactly its models
 and set `--sizes` to that group's size.
+
+
+## Atomic tables with learned pooling
+
+Use `atomic.py` for all five methods in one row per dataset and exact model group:
+`mean`, `logodds_sum`, `logodds_mean`, `shared_rho`, and `shared_scale`.
+The numerical methods live in `src/conf_compose/composition/pooling/`.
+The older `run.py --atomic-csv` path above still reports its original three fixed methods.
+
+`shared_rho` centers stream logits separately within correct and incorrect majority-answer groups,
+estimates their pooled within-class correlation, averages the pairwise correlations, clips the result
+to [0, 1], and applies `1 / (1 + (S - 1) * rho)` to the summed logits. This is a restricted
+exchangeability-based discount, not a full Bayesian dependence model.
+`shared_scale` minimizes binary NLL over one positive multiplier of the summed logits, bounded
+between 0.001 and 100. Neither method learns an intercept. Both preserve log-odds ranking at a fixed
+panel size. Ranking metrics use logits to avoid artificial ties from sigmoid saturation.
+
+By default, a deterministic hash of task, question ID, and `--fit-seed` reserves approximately
+`--fit-fraction 0.3` of the saved test questions for fitting. Every method and member baseline is
+then evaluated on the remaining questions. These metrics therefore use a different evaluation
+set from earlier full-test tables. The fitting labels always describe the same majority answer
+that every stream scores. `--fit-split validation` instead reads `validation.jsonl` from the same
+selected inference cells and evaluates on all saved test questions; overlapping IDs are rejected.
+
+```bash
+python runs/experiment02-voting_composition/atomic.py \
+  --tasks csqa boolq gsm8k truthfulqa gpqa \
+  --group vllm/q3-8bi vllm/l31-8bi vllm/g2-9i \
+  --samples 5 --voter 0 --match _cs7s --estimator cons \
+  --fit-fraction 0.3 --fit-seed 0 \
+  --out results/voting_atomic/learned_cons.csv
+
+python runs/experiment02-voting_composition/atomic.py \
+  --tasks csqa boolq gsm8k truthfulqa gpqa \
+  --group vllm/q3-8bi vllm/l31-8bi vllm/g2-9i \
+  --samples 5 --voter 0 --match _cs7s --estimator seq \
+  --context direct --seq-score norm_sum \
+  --fit-fraction 0.3 --fit-seed 0 \
+  --out results/voting_atomic/learned_seq.csv
+```
+
+List more models and add `--sizes 2 3 4 5 6` to enumerate subsets, or omit `--sizes` to evaluate
+exactly the listed group. Majority ties follow model order. This runner is offline and never
+updates inference files. CSV rows append; use a new output path for a new experiment.
+Old CSV headers are rejected rather than mixed with the new schema.
+
+The table includes per-model accuracy and confidence metrics, majority accuracy, all five pools'
+ECE/AUARC/AUROC/Brier/NLL and coverage, fitting counts, ID hashes, scales, raw/clipped rho,
+optimizer bounds and fit statuses. Pools require a score from every member. Undefined learned
+fits are left blank with a reason: shared rho requires at least two correct and two incorrect
+fitting examples and nonzero within-class variance in every stream; shared scale requires both
+classes and a nonzero summed logit. Boundary solutions are identified explicitly.

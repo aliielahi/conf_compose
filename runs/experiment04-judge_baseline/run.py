@@ -13,6 +13,8 @@ from conf_compose.pipelines.inference import STORE, load_model
 from conf_compose.utils.metrics import auarc, auroc, ece
 
 NAME = "experiment04-judge_baseline"
+# The store's 8192 default overflowed on gpqa with 5-6 members (8,651 tokens); the longest panels need ~9k.
+JUDGE_CONTEXT = 32768
 
 # Candidate scoring lives in its own record field, so these are aggregated here rather than read off.
 CANDIDATE_METHODS = tuple(f"cand_{context}_{agg}" for context in ("direct", "reasoned")
@@ -128,29 +130,34 @@ def build_views(args, task, per_model):
     return views
 
 
-def report(task, views, verdicts, modes):
-    """Does the judge's confidence rank the majority answer's correctness?"""
-    labels = [float(task.is_correct(v.final_answer, Example(w.example_id, w.question, w.gold)))
-              for w, v in zip(views, verdicts)]
-    written = sum(bool(v.justification) for v in verdicts)
-    accuracy = sum(labels) / max(len(labels), 1)
-    print(f"majority accuracy {accuracy:.3f} over {len(labels)} example(s); "
-          f"justifications {written}/{len(verdicts)}")
-    print(f"{'mode':<12}{'cov':>7}{'auroc':>8}{'auarc':>8}{'ece':>8}{'mean':>8}")
-    row = {"majority_acc": round(accuracy, 4), "justifications": written}
+def metrics(rows, modes=("verbalized",)):
+    """Scores from saved verdict rows, so a live run and a rebuild from disk agree exactly."""
+    labels = [float(row["correct"]) for row in rows]
+    known = [row for row in rows if row.get("finish_reason") is not None]
+    summary = {"n": len(rows), "majority_acc": round(sum(labels) / max(len(labels), 1), 4),
+               "justifications": sum(bool(row.get("justification")) for row in rows),
+               "truncated": sum(row["finish_reason"] == "length" for row in known) if known else None,
+               "max_prompt_tokens": max((row.get("prompt_tokens") or 0 for row in rows), default=0) or None}
     for mode in modes:
-        pairs = [(getattr(v, mode), y) for v, y in zip(verdicts, labels) if getattr(v, mode) is not None]
-        coverage = len(pairs) / max(len(verdicts), 1)
+        pairs = [(row[mode], y) for row, y in zip(rows, labels) if row.get(mode) is not None]
+        summary[f"{mode}_cov"] = round(len(pairs) / max(len(rows), 1), 4)
         if len(pairs) < 10 or not 0 < sum(y for _, y in pairs) < len(pairs):
-            print(f"{mode:<12}{coverage:>7.3f}{'—':>8}{'—':>8}{'—':>8}{'—':>8}")
-            row.update({f"{mode}_cov": round(coverage, 4)})
             continue
         scores, ys = [s for s, _ in pairs], [y for _, y in pairs]
-        values = {"cov": coverage, "auroc": auroc(scores, ys), "auarc": auarc(scores, ys),
-                  "ece": ece(scores, ys), "mean": sum(scores) / len(scores)}
-        print(f"{mode:<12}" + "".join(f"{v:>8.3f}" for v in values.values()))
-        row.update({f"{mode}_{k}": round(v, 4) for k, v in values.items()})
-    return row
+        summary.update({f"{mode}_auroc": round(auroc(scores, ys), 4), f"{mode}_auarc": round(auarc(scores, ys), 4),
+                        f"{mode}_ece": round(ece(scores, ys), 4),
+                        f"{mode}_mean": round(sum(scores) / len(scores), 4)})
+    return summary
+
+
+def report(summary, modes):
+    print(f"majority accuracy {summary['majority_acc']:.3f} over {summary['n']} example(s); "
+          f"justifications {summary['justifications']}/{summary['n']}; truncated {summary['truncated']}; "
+          f"longest prompt {summary['max_prompt_tokens']} tokens")
+    print(f"{'mode':<12}{'cov':>7}{'auroc':>8}{'auarc':>8}{'ece':>8}{'mean':>8}")
+    for mode in modes:
+        cells = [summary.get(f"{mode}_{k}") for k in ("cov", "auroc", "auarc", "ece", "mean")]
+        print(f"{mode:<12}" + "".join(f"{v:>8.3f}" if v is not None else f"{'—':>8}" for v in cells))
 
 
 def judge_once(args, llm):
@@ -165,31 +172,45 @@ def judge_once(args, llm):
         print(f"  panel {model:<20}{cell}")
 
     config = JudgeConfig(view=args.view, confidence_method=args.confidence_method,
-                         modes=tuple(args.modes), word_limit=args.word_limit, max_tokens=args.max_tokens)
+                         modes=tuple(args.modes), word_limit=args.word_limit, max_tokens=args.max_tokens,
+                         context=JUDGE_CONTEXT)
     verdicts = Judge(llm, task, config).run(views)
 
+    rows = []
+    for view, verdict in zip(views, verdicts):
+        row = verdict.to_dict()
+        row["gold"] = view.gold
+        row["correct"] = task.is_correct(verdict.final_answer, Example(view.example_id, view.question, view.gold))
+        rows.append(row)
+    summary = {**describe(args), **metrics(rows, args.modes), "context": JUDGE_CONTEXT}
+
+    # metrics.json goes last: a cell is complete only once it exists.
     out_dir = Path(args.out_dir) / args.task / _cell(args)
     out_dir.mkdir(parents=True, exist_ok=True)
-    with (out_dir / "verdicts.jsonl").open("w") as handle:
-        for view, verdict in zip(views, verdicts):
-            row = verdict.to_dict()
-            row["gold"] = view.gold
-            row["correct"] = task.is_correct(verdict.final_answer,
-                                             Example(view.example_id, view.question, view.gold))
-            handle.write(json.dumps(row) + "\n")
+    (out_dir / "verdicts.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     (out_dir / "manifest.json").write_text(json.dumps(
-        {"experiment": NAME, "args": vars(args), "examples": len(views)}, indent=2))
+        {"experiment": NAME, "args": vars(args), "examples": len(views), "context": JUDGE_CONTEXT}, indent=2))
+    (out_dir / "metrics.json").write_text(json.dumps(summary, indent=2))
 
-    summary = report(task, views, verdicts, args.modes)
+    report(summary, args.modes)
     print(f"saved {out_dir}")
+    return summary
+
+
+def describe(args):
+    """The columns that identify a cell in summary.csv."""
     return {"task": args.task, "judge": args.judge, "n_models": len(args.panel),
             "panel": "+".join(m.split("/")[-1] for m in args.panel), "view": args.view,
-            "shown_confidence": shown, "n": len(views), **summary}
+            "shown_confidence": args.confidence_method if args.view == "reasoning_confidence" else "none"}
+
+
+def load_judge(name):
+    return load_model(name, max_model_len=JUDGE_CONTEXT)
 
 
 def main():
     args = parse_args()
-    judge_once(args, load_model(args.judge))
+    judge_once(args, load_judge(args.judge))
 
 
 def _cell(args):

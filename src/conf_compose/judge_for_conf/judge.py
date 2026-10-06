@@ -14,8 +14,9 @@ from .prompts import HEADER, INSTRUCTION, MEMBER, SCORING, VIEWS
 
 # The judge states its confidence in the same generation; the other two are probes over that verdict.
 CONFIDENCE_MODES = ("verbalized", "ptrue", "seqprob")
-_RATING = re.compile(r"confidence\s*[:=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
-_JUSTIFICATION = re.compile(r"justification\s*[:=]\s*(.+)", re.IGNORECASE)
+# The judge may quote members' confidences while reasoning, so only the last labelled value is its own.
+_RATING = re.compile(r"confidence\**\s*[:=]\s*\**\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+_JUSTIFICATION = re.compile(r"justification\**\s*[:=]\s*\**\s*(.+)", re.IGNORECASE)
 
 
 @dataclass
@@ -46,6 +47,7 @@ class JudgeConfig:
     max_tokens: int = 512
     temperature: float = 0.0
     shuffle: bool = True
+    context: Optional[int] = None   # the judge's window; a prompt that cannot fit is refused, never truncated
 
     def __post_init__(self):
         if self.view not in VIEWS:
@@ -64,6 +66,9 @@ class Verdict:
     prompt: str
     order: List[str]
     justification: str = ""
+    finish_reason: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
     verbalized: Optional[float] = None
     ptrue: Optional[float] = None
     seqprob: Optional[float] = None
@@ -72,6 +77,8 @@ class Verdict:
     def to_dict(self) -> Dict[str, Any]:
         return {"id": self.example_id, "final_answer": self.final_answer,
                 "justification": self.justification, "response": self.response,
+                "finish_reason": self.finish_reason, "prompt_tokens": self.prompt_tokens,
+                "output_tokens": self.output_tokens,
                 "prompt": self.prompt, "order": self.order, "verbalized": self.verbalized,
                 "ptrue": self.ptrue, "seqprob": self.seqprob, "candidates": self.candidates}
 
@@ -89,19 +96,37 @@ class Judge:
             return []
         built = [self.build_prompt(view) for view in views]
         prompts = [prompt for prompt, _ in built]
+        lengths = self.check_fit(views, prompts)
         generations = self.llm.generate(prompts, max_tokens=self.config.max_tokens,
                                         temperature=self.config.temperature)
         verdicts = [
             Verdict(view.example_id, view.final_answer, generation.text, prompt, list(order),
                     justification=_justification(generation.text),
+                    finish_reason=generation.finish_reason,
+                    prompt_tokens=generation.input_tokens or length,
+                    output_tokens=generation.output_tokens,
                     verbalized=_rating(generation.text) if "verbalized" in self.config.modes else None)
-            for view, (prompt, order), generation in zip(views, built, generations)
+            for view, (prompt, order), generation, length in zip(views, built, generations, lengths)
         ]
         if "ptrue" in self.config.modes:
             self._add_ptrue(views, verdicts)
         if "seqprob" in self.config.modes:
             self._add_seqprob(views, verdicts)
         return verdicts
+
+    def check_fit(self, views: Sequence[PanelView], prompts: List[str]) -> List[Optional[int]]:
+        """Count every prompt with the judge's own tokenizer and chat template; refuse the batch if one overflows."""
+        if not self.config.context or not hasattr(self.llm, "encode"):
+            return [None] * len(prompts)
+        rendered = [self.llm.render(None, [{"role": "user", "content": prompt}]) for prompt in prompts]
+        lengths = [len(ids) for ids in self.llm.encode(rendered)["input_ids"]]
+        budget = self.config.context - self.config.max_tokens
+        over = [(view.example_id, n) for view, n in zip(views, lengths) if n > budget]
+        if over:
+            raise ValueError(f"{len(over)}/{len(prompts)} prompt(s) exceed {budget} tokens "
+                             f"(context {self.config.context} - max_tokens {self.config.max_tokens}); "
+                             f"longest {max(n for _, n in over)} at {max(over, key=lambda o: o[1])[0]}")
+        return lengths
 
     def build_prompt(self, view: PanelView) -> tuple:
         """Members are anonymised and their order shuffled per example, so position carries no information."""
@@ -187,16 +212,18 @@ class Judge:
 
 def _justification(text: str) -> str:
     """Saved only; nothing reads it yet. Falls back to the last line before the rating when unlabelled."""
-    match = _JUSTIFICATION.search(text)
-    if match:
-        return match.group(1).strip()
-    lines = [line.strip() for line in _RATING.split(text)[0].splitlines() if line.strip()]
+    matches = _JUSTIFICATION.findall(text)
+    if matches:
+        return matches[-1].strip()
+    ratings = list(_RATING.finditer(text))
+    before = text[:ratings[-1].start()] if ratings else text
+    lines = [line.strip() for line in before.splitlines() if line.strip()]
     return lines[-1] if lines else ""
 
 
 def _rating(text: str, scale: float = 10) -> Optional[float]:
-    match = _RATING.search(text)
-    if match is None:
+    matches = _RATING.findall(text)
+    if not matches:
         return None
-    value = float(match.group(1)) / scale
+    value = float(matches[-1]) / scale
     return value if 0 <= value <= 1 else None

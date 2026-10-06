@@ -3,36 +3,11 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
-from .candidates import (OTHER, Support, candidate_set, logit, sigmoid, softmax, state_space, support)
+from .candidates import (OTHER, Support, candidate_set, softmax, state_space, support)
 from .evidence import Item, Stream
-
-
-@dataclass
-class Prediction:
-    """One method's output for one example: a score, and for family B the answer it selected."""
-    score: Optional[float]
-    is_probability: bool = True
-    answer: Optional[str] = None
-    logit: Optional[float] = None
-    details: Dict[str, float] = field(default_factory=dict)
-
-
-def pool_methods(scores: Sequence[float], prior: Optional[float] = None) -> Dict[str, Prediction]:
-    """Fixed pooling rules over ratings of one shared target; logits are kept for calibration."""
-    if not scores:
-        return {}
-    logits = [logit(value) for value in scores]
-    total, mean = sum(logits), sum(logits) / len(logits)
-    methods = {"mean": Prediction(sum(scores) / len(scores)),
-               "logodds_sum": Prediction(sigmoid(total), logit=total),
-               "logodds_mean": Prediction(sigmoid(mean), logit=mean)}
-    if prior is not None:
-        methods["prior_logodds_sum"] = Prediction(prior_corrected(logits, prior, 1.0))
-        methods["prior_logodds_mean"] = Prediction(prior_corrected(logits, prior, 1 / len(logits)))
-    return methods
+from .pooling import Prediction, pool_methods, prior_corrected
 
 
 def fixed_answer_methods(task, item: Item, streams: Sequence[Stream], target: Optional[str],
@@ -95,11 +70,6 @@ def selection_methods(task, item: Item, streams: Sequence[Stream], budget: Optio
         if best.answer is not None:
             methods["max_own_support"] = Prediction(supports[best.stream_id].raw(best.answer), answer=best.answer)
     return methods
-
-
-def prior_corrected(logits: Sequence[float], prior: float, w: float) -> float:
-    """sigma[w * sum_j logit(q_j) - (w*S - 1) * logit(pi)]; the prior cancels exactly at w = 1/S."""
-    return sigmoid(w * sum(logits) - (w * len(logits) - 1) * logit(prior))
 
 
 def majority_answer(task, streams: Sequence[Stream]) -> Optional[str]:
