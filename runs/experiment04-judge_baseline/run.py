@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from conf_compose.constants import RESULTS_DIR, TASKS
@@ -13,6 +14,39 @@ from conf_compose.utils.metrics import auarc, auroc, ece
 
 NAME = "experiment04-judge_baseline"
 
+# Candidate scoring lives in its own record field, so these are aggregated here rather than read off.
+CANDIDATE_METHODS = tuple(f"cand_{context}_{agg}" for context in ("direct", "reasoned")
+                          for agg in ("sum", "norm_mean", "debiased"))
+
+
+def signal(task, record, method):
+    """One model's confidence in its own answer: a stored signal, or one built from the candidate scores."""
+    if not method.startswith("cand_"):
+        return record["confidence"].get(method)
+    _, context, agg = method.split("_", 2)
+    candidates = (record.get("candidate_scores") or {}).get("candidates") or []
+    target = record["prediction"]
+    if target is None or not candidates:
+        return None
+    scores, matches = [], []
+    for candidate in candidates:
+        logprobs = (candidate.get(context) or {}).get("logprobs")
+        if not logprobs or not all(math.isfinite(v) for v in logprobs):
+            return None
+        value = sum(logprobs)
+        if agg == "norm_mean":
+            value /= len(logprobs)
+        elif agg == "debiased":
+            nulls = [sum(row) for row in (candidate.get("null") or {}).values() if row]
+            value -= max(nulls) if nulls else 0.0
+        scores.append(value)
+        matches.append(task.equivalent(candidate["answer"], target))
+    if not any(matches):
+        return None
+    top = max(scores)
+    weights = [math.exp(value - top) for value in scores]
+    return sum(w for w, match in zip(weights, matches) if match) / sum(weights)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -21,8 +55,8 @@ def parse_args():
     parser.add_argument("--panel", nargs="+", required=True, help="the models whose evidence it reads")
     parser.add_argument("--view", default="reasoning_confidence", choices=list(VIEWS))
     parser.add_argument("--confidence-method", default="consistency_t0.7",
-                        help="which saved signal the judge is shown, e.g. consistency_t0.7, verification, "
-                             "verbalized, seq_response")
+                        help="the one signal the judge is shown: a stored key such as consistency_t0.7, "
+                             f"or one of {', '.join(CANDIDATE_METHODS)}")
     parser.add_argument("--modes", nargs="+", default=["verbalized"], choices=list(CONFIDENCE_MODES),
                         help="how to read the judge's own confidence; verbalized is what we report")
     parser.add_argument("--voter", type=int, default=0)
@@ -70,8 +104,13 @@ def build_views(args, task, per_model):
     """Only examples every panel model answered, so each judgement sees the whole panel."""
     if args.view == "reasoning_confidence":
         for model, (rows, cell) in per_model.items():
-            available = sorted(next(iter(rows.values()))["confidence"])
-            if args.confidence_method not in available:
+            probe = next(iter(rows.values()))
+            if args.confidence_method in CANDIDATE_METHODS:
+                if not (probe.get("candidate_scores") or {}).get("candidates"):
+                    raise SystemExit(f"{model} ({cell}) has no candidate scores; "
+                                     "use a candidate-scored cell, e.g. --match _cs7s")
+            elif args.confidence_method not in probe["confidence"]:
+                available = sorted(probe["confidence"]) + list(CANDIDATE_METHODS)
                 raise SystemExit(f"{model} ({cell}) has no '{args.confidence_method}'; "
                                  f"available:\n  " + "\n  ".join(available))
     shared = sorted(set.intersection(*(set(rows) for rows, _ in per_model.values())), key=_sort_key)
@@ -81,7 +120,7 @@ def build_views(args, task, per_model):
     for example_id in shared:
         rows = {model: per_model[model][0][example_id] for model in args.panel}
         entries = [PanelEntry(model=model, answer=row["prediction"], reasoning=row["response"],
-                              confidence=row["confidence"].get(args.confidence_method))
+                              confidence=signal(task, row, args.confidence_method))
                    for model, row in rows.items()]
         first = rows[args.panel[0]]
         views.append(PanelView(example_id, first.get("question", ""), first["gold"], entries,
