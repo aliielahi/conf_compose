@@ -1,6 +1,6 @@
-"""Judge baseline: one model reads a panel of answers and returns a final answer with a confidence."""
+"""Judge as a confidence combiner: it is given the aggregated answer and returns a confidence in it."""
 
 from .judge import CONFIDENCE_MODES, Judge, JudgeConfig, PanelEntry, PanelView, Verdict
-from .prompts import LEVELS
+from .prompts import VIEWS
 
-__all__ = ["CONFIDENCE_MODES", "Judge", "JudgeConfig", "PanelEntry", "PanelView", "Verdict", "LEVELS"]
+__all__ = ["CONFIDENCE_MODES", "Judge", "JudgeConfig", "PanelEntry", "PanelView", "Verdict", "VIEWS"]
