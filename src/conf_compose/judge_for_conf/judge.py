@@ -41,7 +41,7 @@ class PanelView:
 class JudgeConfig:
     view: str = "reasoning_confidence"
     confidence_method: str = "consistency_t0.7"
-    modes: Sequence[str] = CONFIDENCE_MODES
+    modes: Sequence[str] = ("verbalized",)
     word_limit: int = 150
     max_tokens: int = 512
     temperature: float = 0.0

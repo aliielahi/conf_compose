@@ -23,7 +23,8 @@ def parse_args():
     parser.add_argument("--confidence-method", default="consistency_t0.7",
                         help="which saved signal the judge is shown, e.g. consistency_t0.7, verification, "
                              "verbalized, seq_response")
-    parser.add_argument("--modes", nargs="+", default=list(CONFIDENCE_MODES), choices=list(CONFIDENCE_MODES))
+    parser.add_argument("--modes", nargs="+", default=["verbalized"], choices=list(CONFIDENCE_MODES),
+                        help="how to read the judge's own confidence; verbalized is what we report")
     parser.add_argument("--voter", type=int, default=0)
     parser.add_argument("--match", default="", help="substring picking one cell per model, e.g. _cs7s")
     parser.add_argument("--split", default="test")
@@ -93,33 +94,40 @@ def report(task, views, verdicts, modes):
     labels = [float(task.is_correct(v.final_answer, Example(w.example_id, w.question, w.gold)))
               for w, v in zip(views, verdicts)]
     written = sum(bool(v.justification) for v in verdicts)
-    print(f"\nmajority accuracy {sum(labels) / max(len(labels), 1):.3f} over {len(labels)} example(s)")
-    print(f"justifications written {written}/{len(verdicts)} (saved only, nothing reads them yet)")
+    accuracy = sum(labels) / max(len(labels), 1)
+    print(f"majority accuracy {accuracy:.3f} over {len(labels)} example(s); "
+          f"justifications {written}/{len(verdicts)}")
     print(f"{'mode':<12}{'cov':>7}{'auroc':>8}{'auarc':>8}{'ece':>8}{'mean':>8}")
+    row = {"majority_acc": round(accuracy, 4), "justifications": written}
     for mode in modes:
         pairs = [(getattr(v, mode), y) for v, y in zip(verdicts, labels) if getattr(v, mode) is not None]
+        coverage = len(pairs) / max(len(verdicts), 1)
         if len(pairs) < 10 or not 0 < sum(y for _, y in pairs) < len(pairs):
-            print(f"{mode:<12}{len(pairs) / max(len(verdicts), 1):>7.3f}{'—':>8}{'—':>8}{'—':>8}{'—':>8}")
+            print(f"{mode:<12}{coverage:>7.3f}{'—':>8}{'—':>8}{'—':>8}{'—':>8}")
+            row.update({f"{mode}_cov": round(coverage, 4)})
             continue
         scores, ys = [s for s, _ in pairs], [y for _, y in pairs]
-        print(f"{mode:<12}{len(pairs) / len(verdicts):>7.3f}{auroc(scores, ys):>8.3f}"
-              f"{auarc(scores, ys):>8.3f}{ece(scores, ys):>8.3f}{sum(scores) / len(scores):>8.3f}")
+        values = {"cov": coverage, "auroc": auroc(scores, ys), "auarc": auarc(scores, ys),
+                  "ece": ece(scores, ys), "mean": sum(scores) / len(scores)}
+        print(f"{mode:<12}" + "".join(f"{v:>8.3f}" for v in values.values()))
+        row.update({f"{mode}_{k}": round(v, 4) for k, v in values.items()})
+    return row
 
 
-def main():
-    args = parse_args()
+def judge_once(args, llm):
+    """One task and one panel; the caller owns the model so a sweep loads it once."""
     task = get_task(args.task)
     per_model = panel_records(args)
     views = build_views(args, task, per_model)
     shown = args.confidence_method if args.view == "reasoning_confidence" else "none"
-    print(f"{args.task}: judge={args.judge} view={args.view} shown_confidence={shown} "
+    print(f"\n{args.task}: judge={args.judge} view={args.view} shown_confidence={shown} "
           f"examples={len(views)} modes={','.join(args.modes)}")
     for model, (_, cell) in per_model.items():
         print(f"  panel {model:<20}{cell}")
 
     config = JudgeConfig(view=args.view, confidence_method=args.confidence_method,
                          modes=tuple(args.modes), word_limit=args.word_limit, max_tokens=args.max_tokens)
-    verdicts = Judge(load_model(args.judge), task, config).run(views)
+    verdicts = Judge(llm, task, config).run(views)
 
     out_dir = Path(args.out_dir) / args.task / _cell(args)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -133,8 +141,16 @@ def main():
     (out_dir / "manifest.json").write_text(json.dumps(
         {"experiment": NAME, "args": vars(args), "examples": len(views)}, indent=2))
 
-    report(task, views, verdicts, args.modes)
-    print(f"\nsaved {out_dir}")
+    summary = report(task, views, verdicts, args.modes)
+    print(f"saved {out_dir}")
+    return {"task": args.task, "judge": args.judge, "n_models": len(args.panel),
+            "panel": "+".join(m.split("/")[-1] for m in args.panel), "view": args.view,
+            "shown_confidence": shown, "n": len(views), **summary}
+
+
+def main():
+    args = parse_args()
+    judge_once(args, load_model(args.judge))
 
 
 def _cell(args):
