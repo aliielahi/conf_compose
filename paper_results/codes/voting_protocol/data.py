@@ -1,0 +1,295 @@
+import csv
+import hashlib
+import importlib.util
+import json
+import math
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+
+from conf_compose.composition.pooling import FittedBLP, FittedPool, pool_methods
+from conf_compose.constants import ROOT
+from conf_compose.data import get_task
+from conf_compose.utils.metrics import auarc, ece
+
+METRICS = ("ece", "auarc")
+METHODS = {
+    "mean": "Arithmetic mean",
+    "logodds_sum": "Log-odds sum",
+    "logodds_mean": "Log-odds mean",
+    "shared_rho": "Shared rho",
+    "shared_scale": "Shared scale",
+    "kahn": "Kahn (full covariance)",
+    "blp": "Weighted BLP",
+    "logistic_pool": "Regularized logistic pooling",
+}
+ABLATIONS = {"blp_equal": "Equal-weight BLP", "kahn_diagonal": "Kahn (diagonal covariance)"}
+SIGNALS = {"cons": "consistency_t0.7", "seq": "cand_direct_sum"}
+
+
+def atomic_module():
+    path = ROOT / "runs/experiment02-voting_composition/atomic.py"
+    spec = importlib.util.spec_from_file_location("voting_atomic_report_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
+
+
+def read_jsonl(path):
+    rows = {}
+    with path.open() as handle:
+        for line in handle:
+            if line.strip():
+                row = json.loads(line)
+                if row["id"] in rows:
+                    raise ValueError(f"duplicate ID in {path}: {row['id']}")
+                rows[row["id"]] = row
+    return rows
+
+
+def load_csvs(directory, estimators):
+    cells = []
+    for estimator in estimators:
+        with (directory / f"{estimator}.csv").open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        seen = set()
+        for row in rows:
+            key = (row["task"], row["models"])
+            if key in seen or row["estimator"] != estimator:
+                raise ValueError(f"duplicate or incorrectly labeled result: {key}, {estimator}")
+            seen.add(key)
+            cells.append(row)
+    return cells
+
+
+def index_judges(directory, judges):
+    result = {}
+    for path in sorted(directory.glob("*/*/manifest.json")):
+        manifest = json.loads(path.read_text())
+        args = manifest["args"]
+        judge = args["judge"].split("/")[-1]
+        if judge not in judges or args.get("split", "test") != "test":
+            continue
+        view = args["view"]
+        signal = args["confidence_method"] if view == "reasoning_confidence" else "none"
+        if view not in ("reasoning", "reasoning_confidence") or signal not in ("none", *SIGNALS.values()):
+            continue
+        panel = tuple(model.split("/")[-1] for model in args["panel"])
+        key = (args["task"], panel, judge, view, signal, int(args.get("voter", 0)))
+        if key in result:
+            raise ValueError(f"ambiguous judge cells: {result[key]} and {path}")
+        if path.with_name("verdicts.jsonl").exists() and path.with_name("metrics.json").exists():
+            result[key] = path
+    return result
+
+
+def restore_fit(row, method):
+    parameters = json.loads(row[f"{method}_parameters"])
+    scale = row[f"{method}_scale"]
+    fields = dict(name=method, n_streams=int(row["n_models"]), scale=float(scale) if scale else None,
+                  status=row[f"{method}_status"], n_fit=int(row["n_fit_scored"]),
+                  n_errors=int(row["n_fit_errors"]), parameters=parameters,
+                  weights=tuple(parameters["weights"]) if "weights" in parameters else None,
+                  intercept=float(parameters.get("intercept", 0)))
+    if method.startswith("blp"):
+        return FittedBLP(**fields, alpha=parameters.get("alpha", 1), beta=parameters.get("beta", 1))
+    return FittedPool(**fields)
+
+
+def rank_value(prediction):
+    if prediction.ranking_score is not None:
+        return prediction.ranking_score
+    return prediction.logit if prediction.logit is not None else prediction.score
+
+
+def valid_probability(value):
+    return value is not None and math.isfinite(value) and 0 <= value <= 1
+
+
+def metric_values(scores, correct, ranks=None):
+    return {"ece": float(ece(scores, correct)),
+            "auarc": float(auarc(scores if ranks is None else ranks, correct))}
+
+
+def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy):
+    if mode == "metric_best":
+        return {"ece": min(range(len(solo_metrics)), key=lambda index: solo_metrics[index]["ece"]),
+                "auarc": max(range(len(solo_metrics)), key=lambda index: solo_metrics[index]["auarc"])}
+    accuracy = fitting_accuracy if mode == "fit_accuracy" else solo_accuracy
+    selected = max(range(len(accuracy)), key=lambda index: accuracy[index])
+    return dict.fromkeys(METRICS, selected)
+
+
+class SourceStore:
+    def __init__(self, directory):
+        self.directory = directory
+        self.task = None
+        self.records = {}
+        self.hashes = {}
+        self.paths = {}
+
+    def get(self, atomic, row, group, split):
+        if self.task != row["task"]:
+            self.task = row["task"]
+            self.records.clear()
+        args = row_arguments(row, self.directory)
+        args.group = group
+        paths = atomic.cell_paths(row["task"], args, split)
+        expected = json.loads(row["input_hashes"])
+        for model, path in paths.items():
+            if path not in self.hashes:
+                self.hashes[path] = digest(path)
+            if self.hashes[path] != expected[model][split]:
+                raise ValueError(f"inference changed since pooling fit: {path}")
+            if path not in self.records:
+                self.records[path] = read_jsonl(path)
+            self.paths[str(path)] = self.hashes[path]
+        return {model: self.records[path] for model, path in paths.items()}
+
+
+def row_arguments(row, store):
+    return SimpleNamespace(group=json.loads(row["model_ids"]), store=str(store), match=row["match"],
+                           voter=int(row["voter"]), samples=int(row["n_samples"]),
+                           estimator=row["estimator"], context=row["context"] or "direct",
+                           seq_score=row["seq_score"] or "norm_sum", all_signals=True,
+                           no_verbalized=False)
+
+
+def process_cell(row, sources, judge_index, judges, methods, reference):
+    atomic = atomic_module()
+    group = json.loads(row["model_ids"])
+    args = row_arguments(row, sources.directory)
+    task = get_task(row["task"])
+    records = sources.get(atomic, row, group, "test")
+    items = atomic.group_items(records, group)
+    if row["fit_split"] == "holdout":
+        fitting, evaluation = atomic.split_items(row["task"], items, float(row["fit_fraction"]), int(row["fit_seed"]))
+        fitting_records = records
+    else:
+        fitting_records = sources.get(atomic, row, group, "validation")
+        fitting = atomic.group_items(fitting_records, group)
+        evaluation = items
+    for name, subset in (("fit", fitting), ("eval", evaluation)):
+        if atomic.id_digest([item.example_id for item in subset]) != row[f"{name}_ids_hash"]:
+            raise ValueError(f"{name} IDs do not match saved pooling run for {row['task']}/{row['models']}")
+    fitting_accuracy = [sum(bool(fitting_records[model][item.example_id]["correct"]) for item in fitting) / len(fitting)
+                        for model in group]
+    judge_rows, missing, judge_sources = {}, {}, {}
+    panel = tuple(model.split("/")[-1] for model in group)
+    for judge in judges:
+        for view in ("reasoning", "reasoning_confidence"):
+            method = f"judge:{judge}:{view}"
+            signal = SIGNALS[row["estimator"]] if view == "reasoning_confidence" else "none"
+            key = (row["task"], panel, judge, view, signal, int(row["voter"]))
+            path = judge_index.get(key)
+            if path is None:
+                missing[method] = "judge cell absent"
+                continue
+            manifest = json.loads(path.read_text())
+            if manifest["args"].get("match", "") != row["match"]:
+                raise ValueError(f"judge used a different inference selector: {path}")
+            judge_rows[method] = read_jsonl(path.with_name("verdicts.jsonl"))
+            judge_sources[method] = {"path": str(path.parent),
+                                     "verdicts_hash": digest(path.with_name("verdicts.jsonl")),
+                                     "context": json.loads(path.with_name("metrics.json").read_text()).get("context")}
+    fitted = {method: restore_fit(row, method) for method in methods if method not in ("mean", "logodds_sum", "logodds_mean")}
+    unavailable = {name for name, fit in fitted.items() if fit.weights is None and fit.scale is None}
+    missing.update({name: f"fit status: {fitted[name].status}" for name in unavailable})
+    active_methods = [method for method in methods if method not in unavailable]
+    values = {method: [] for method in [*active_methods, *judge_rows]}
+    rankings = {method: [] for method in values}
+    solo = [[] for _ in group]
+    solo_labels = [[] for _ in group]
+    labels, retained_ids, scored_ids = [], [], []
+    exclusions = {"source": 0, "judge": 0}
+    replay_values = {method: [] for method in active_methods}
+    replay_ranks = {method: [] for method in active_methods}
+    replay_labels = []
+    for item in evaluation:
+        target, own, scores = atomic.confidence_scores(task, item, args, records)
+        original_label = None
+        if target is not None and all(valid_probability(score) for score in scores):
+            from conf_compose.data import Example
+            original_label = float(task.is_correct(target, Example(item.example_id, item.question, item.gold)))
+            scored_ids.append(item.example_id)
+            predictions = pool_methods(scores)
+            predictions.update({method: fit.predict(scores) for method, fit in fitted.items() if method not in unavailable})
+            replay_labels.append(original_label)
+            for method in active_methods:
+                replay_values[method].append(predictions[method].score)
+                replay_ranks[method].append(rank_value(predictions[method]))
+        if original_label is None or not all(valid_probability(score) for score in own):
+            exclusions["source"] += 1
+            continue
+        selected_judges = {}
+        for method, verdicts in judge_rows.items():
+            verdict = verdicts.get(item.example_id)
+            if verdict is None:
+                continue
+            if not task.equivalent(verdict["final_answer"], target) or bool(verdict["correct"]) != bool(original_label):
+                raise ValueError(f"judge answer/label differs from majority: {method}/{item.example_id}")
+            if valid_probability(verdict.get("verbalized")):
+                selected_judges[method] = float(verdict["verbalized"])
+        if len(selected_judges) != len(judge_rows):
+            exclusions["judge"] += 1
+            continue
+        retained_ids.append(item.example_id)
+        labels.append(original_label)
+        for index, model in enumerate(group):
+            solo[index].append(own[index])
+            solo_labels[index].append(float(records[model][item.example_id]["correct"]))
+        for method in active_methods:
+            values[method].append(predictions[method].score)
+            rankings[method].append(rank_value(predictions[method]))
+        for method, value in selected_judges.items():
+            values[method].append(value)
+            rankings[method].append(value)
+    if atomic.id_digest(scored_ids) != row["eval_scored_ids_hash"]:
+        raise ValueError("scored question IDs differ from saved pooling results")
+    for method in active_methods:
+        if not replay_values[method]:
+            continue
+        replay = metric_values(replay_values[method], replay_labels, replay_ranks[method])
+        for metric, value in replay.items():
+            if abs(value - float(row[f"{method}_{metric}"])) > 0.000051:
+                raise ValueError(f"cannot reproduce saved {method}/{metric}: {value} vs {row[f'{method}_{metric}']}")
+    metadata = {"task": row["task"], "estimator": row["estimator"], "models": row["models"],
+                "n_models": len(group), "n_samples": int(row["n_samples"]),
+                "n_evaluation": len(evaluation), "n_matched": len(labels),
+                "coverage": len(labels) / len(evaluation), "exclusions": exclusions,
+                "fit_ids_hash": row["fit_ids_hash"], "eval_ids_hash": row["eval_ids_hash"],
+                "matched_ids_hash": atomic.id_digest(retained_ids), "matched_ids": retained_ids,
+                "judge_sources": judge_sources, "missing": missing, "source_code_hash": row["code_hash"],
+                "fitting_accuracy": dict(zip(group, fitting_accuracy)), "reference_mode": reference}
+    if not labels:
+        metadata["missing"].update({method: "no common scored questions" for method in values})
+        return [], metadata
+    solo_metrics = [metric_values(scores, correct) for scores, correct in zip(solo, solo_labels)]
+    solo_accuracy = [float(np.mean(correct)) for correct in solo_labels]
+    indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy)
+    baseline = {metric: solo_metrics[indices[metric]][metric] for metric in METRICS}
+    metadata["reference_models"] = {metric: group[indices[metric]] for metric in METRICS}
+    metadata["solo_metrics"] = {model: {**solo_metrics[index], "accuracy": solo_accuracy[index]} for index, model in enumerate(group)}
+    metadata["vote_accuracy"] = float(np.mean(labels))
+    output = []
+    for method in ["best_solo", *values]:
+        metrics = baseline if method == "best_solo" else metric_values(values[method], labels, rankings[method])
+        entry = {key: metadata[key] for key in ("task", "estimator", "models", "n_models", "n_matched", "coverage", "reference_mode")}
+        entry.update(method=method, accuracy=None if method == "best_solo" and reference == "metric_best" else
+                     (solo_accuracy[indices["ece"]] if method == "best_solo" else metadata["vote_accuracy"]))
+        for metric in METRICS:
+            entry[metric] = metrics[metric]
+            entry[f"reference_{metric}"] = baseline[metric]
+            entry[f"delta_{metric}"] = metrics[metric] - baseline[metric]
+            entry[f"reference_{metric}_model"] = group[indices[metric]]
+        output.append(entry)
+    return output, metadata

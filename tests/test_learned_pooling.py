@@ -129,6 +129,10 @@ def test_atomic_fitting_cannot_see_evaluation_labels_and_ranking_is_preserved(at
         assert original[f"{name}_auroc"] == original["logodds_sum_auroc"]
         assert original[f"{name}_auarc"] == original["logodds_sum_auarc"]
         assert original[f"{name}_coverage"] == 1
+    for name in ("kahn", "blp", "logistic_pool"):
+        assert original[f"{name}_parameters"] == altered[f"{name}_parameters"]
+        assert original[f"{name}_status"] == altered[f"{name}_status"] == "fitted"
+    assert original["kahn_status"] == altered["kahn_status"] == "fitted"
     assert original["single_acc"] != altered["single_acc"]
     with pytest.raises(ValueError, match="overlap"):
         atomic.run_task("csqa", args, evaluation, {}, evaluation)
@@ -151,7 +155,7 @@ def test_sequence_scores_use_the_shared_target(atomic):
 
 
 @pytest.mark.parametrize("estimator", ["cons", "seq"])
-def test_atomic_cli_generates_all_five_methods_without_modifying_inference(tmp_path, atomic, estimator):
+def test_atomic_cli_generates_all_methods_without_modifying_inference(tmp_path, atomic, estimator):
     store = tmp_path / "inference"
     for agent in range(3):
         cell = store / "csqa" / f"model{agent}--s70v0_k5_fixture"
@@ -180,6 +184,8 @@ def test_atomic_cli_generates_all_five_methods_without_modifying_inference(tmp_p
         assert row["n_examples"] == row["n_fit_questions"] == "80"
         assert row["fit_ids_hash"] != row["eval_ids_hash"]
         assert row["shared_rho_status"] == "fitted"
+        assert row["kahn_status"] == "fitted"
+        assert len(json.loads(row["kahn_parameters"])["weights"]) == int(row["n_models"])
         for rule in atomic.RULES:
             assert row[f"{rule}_ece"] != ""
     assert before == {path: path.read_bytes() for path in store.rglob("*.jsonl")}
@@ -188,3 +194,58 @@ def test_atomic_cli_generates_all_five_methods_without_modifying_inference(tmp_p
     assert result.returncode != 0
     assert "CSV columns differ" in result.stderr
     assert output.read_text() == "old,columns\n"
+
+
+def test_ablations_use_the_same_questions_and_add_only_comparison_columns(atomic):
+    fitting, evaluation = example_items("fit"), example_items("test", 20)
+    base = atomic.run_task("csqa", arguments(fit_split="validation"), evaluation, {}, fitting)
+    controls = atomic.run_task("csqa", arguments(fit_split="validation", ablations=True), evaluation, {}, fitting)
+    assert all(controls[key] == value for key, value in base.items())
+    assert controls["blp_equal_auroc"] == controls["mean_auroc"]
+    assert controls["blp_equal_auarc"] == controls["mean_auarc"]
+    for name in ("blp_equal", "kahn_diagonal"):
+        assert controls[f"{name}_coverage"] == 1
+        assert controls[f"{name}_status"] == "fitted"
+
+
+def test_panel_sweep_writes_each_exact_group_and_estimator(tmp_path, atomic):
+    from conf_compose.constants import COMPOSITION_PANELS
+    models = list(dict.fromkeys(model for panel in COMPOSITION_PANELS for model in panel))
+    store = tmp_path / "inference"
+    for agent, model in enumerate(models):
+        cell = store / "csqa" / f"vllm__{model}--s70v0_k5_fixture"
+        cell.mkdir(parents=True)
+        for split, prefix in (("test", "test"), ("validation", "fit")):
+            rows = []
+            for index in range(30):
+                probability = 0.2 + 0.12 * ((index + agent) % 5)
+                rows.append({"id": f"{prefix}{index}", "question": "question", "gold": "B" if index % 3 == 0 else "A",
+                             "prediction": "A", "sampled_answers": {"consistency_t0.7":
+                                 ["A"] * ((index + agent) % 5 + 1) + ["B"] * (4 - (index + agent) % 5)},
+                             "candidate_scores": {"candidates": [
+                                 {"answer": "A", "direct": {"logprobs": [math.log(probability)]}},
+                                 {"answer": "B", "direct": {"logprobs": [math.log(1 - probability)]}}]}})
+            (cell / f"{split}.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+    before = {path: path.read_bytes() for path in store.rglob("*.jsonl")}
+    output = tmp_path / "out"
+    command = [sys.executable, str(Path(atomic.__file__).with_name("sweep_learned.py")),
+               "--tasks", "csqa", "--estimators", "cons", "seq", "--store", str(store),
+               "--match", "fixture", "--fit-split", "validation", "--ablations", "--out-dir", str(output)]
+    result = subprocess.run(command, capture_output=True, text=True, env=os.environ)
+    assert result.returncode == 0, result.stderr
+    for estimator in ("cons", "seq"):
+        rows = list(csv.DictReader((output / f"{estimator}.csv").open()))
+        assert [row["models"] for row in rows] == ["|".join(panel) for panel in COMPOSITION_PANELS]
+        assert all(row["estimator"] == estimator and row["n_samples"] == "5" for row in rows)
+        for row in rows:
+            assert len(row["code_hash"]) == 64
+            assert len(json.loads(row["input_hashes"])) == int(row["n_models"])
+            for rule in (*atomic.RULES, "blp_equal", "kahn_diagonal"):
+                assert row[f"{rule}_coverage"] == "1.0"
+                assert row[f"{rule}_nll"] != ""
+    outputs_before = {path: path.read_bytes() for path in output.iterdir()}
+    result = subprocess.run(command, capture_output=True, text=True, env=os.environ)
+    assert result.returncode != 0
+    assert "already exist" in result.stderr
+    assert outputs_before == {path: path.read_bytes() for path in output.iterdir()}
+    assert before == {path: path.read_bytes() for path in store.rglob("*.jsonl")}

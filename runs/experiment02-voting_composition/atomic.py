@@ -11,7 +11,7 @@ import numpy as np
 
 from conf_compose.composition import (candidate_set, majority_answer, pool_methods, support)
 from conf_compose.composition.evidence import Item, Stream
-from conf_compose.composition.pooling import LEARNED_FITTERS, RULES
+from conf_compose.composition.pooling import FIXED_RULES, RULES, fit_methods
 from conf_compose.constants import RESULTS_DIR, TASKS
 from conf_compose.data import Example, get_task
 from conf_compose.pipelines.inference import STORE, InferenceSettings, inference_dir
@@ -24,12 +24,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Atomic voting confidence with fixed and fitted pooling rules")
     parser.add_argument("--tasks", nargs="+", required=True, choices=sorted(TASKS))
     parser.add_argument("--group", nargs="+", required=True, help="the models that vote in this group")
+    add_common_arguments(parser)
+    parser.add_argument("--sizes", nargs="+", type=int)
+    parser.add_argument("--estimator", choices=("cons", "seq"), default="cons")
+    parser.add_argument("--out", default=str(RESULTS_DIR / "voting_atomic" / "atomic_learned.csv"))
+    return parser.parse_args()
+
+
+def add_common_arguments(parser):
     parser.add_argument("--fit-fraction", type=float, default=0.3, help="fraction of saved test questions reserved for fitting")
     parser.add_argument("--fit-seed", type=int, default=0)
     parser.add_argument("--fit-split", choices=("holdout", "validation"), default="holdout")
     parser.add_argument("--samples", type=int, default=5)
-    parser.add_argument("--sizes", nargs="+", type=int)
-    parser.add_argument("--estimator", choices=("cons", "seq"), default="cons")
     parser.add_argument("--context", choices=("direct", "reasoned"), default="direct")
     parser.add_argument("--seq-score", choices=("norm_sum", "norm_mean"), default="norm_sum")
     parser.add_argument("--match", default="", help="select saved cells by folder substring")
@@ -37,8 +43,8 @@ def parse_args():
     parser.add_argument("--all-signals", action="store_true", default=True)
     parser.add_argument("--no-verbalized", action="store_true")
     parser.add_argument("--store", default=str(STORE))
-    parser.add_argument("--out", default=str(RESULTS_DIR / "voting_atomic" / "atomic_learned.csv"))
-    return parser.parse_args()
+    parser.add_argument("--ablations", action="store_true", help="also fit equal-weight BLP and diagonal Kahn")
+    parser.add_argument("--logistic-l2", type=float, default=1.0)
 
 
 def cell_paths(task, args, split):
@@ -203,13 +209,15 @@ def run_task(task_name, args, items=None, records=None, fitting=None, fitting_re
             fit_labels.append(float(task.is_correct(target, Example(item.example_id, item.question, item.gold))))
             scored_fit_ids.append(item.example_id)
     matrix = np.asarray(fit_scores, dtype=float).reshape(-1, len(order))
-    fitted = {name: fit(matrix, fit_labels) for name, fit in LEARNED_FITTERS.items()}
+    fitted = fit_methods(matrix, fit_labels, ablations=getattr(args, "ablations", False),
+                         logistic_l2=getattr(args, "logistic_l2", 1.0))
+    rules = (*FIXED_RULES, *fitted)
 
     own = {model: ([], []) for model in order}
     all_own = {model: [] for model in order}
     vote_labels, all_vote_labels, scored_eval_ids = [], [], []
-    pooled = {rule: [] for rule in RULES}
-    ranks = {rule: [] for rule in RULES}
+    pooled = {rule: [] for rule in rules}
+    ranks = {rule: [] for rule in rules}
     agree = 0
     for item in items:
         streams = item.round_streams((0,))
@@ -236,7 +244,10 @@ def run_task(task_name, args, items=None, records=None, fitting=None, fitting_re
         for rule, prediction in predictions.items():
             if prediction.score is not None:
                 pooled[rule].append(prediction.score)
-                ranks[rule].append(prediction.logit if prediction.logit is not None else prediction.score)
+                rank = prediction.ranking_score
+                if rank is None:
+                    rank = prediction.logit if prediction.logit is not None else prediction.score
+                ranks[rule].append(rank)
 
     row = {"task": task_name, "n_models": len(order), "models": "|".join(_short(model) for model in order),
            "model_ids": json.dumps(order), "estimator": args.estimator,
@@ -260,7 +271,7 @@ def run_task(task_name, args, items=None, records=None, fitting=None, fitting_re
     row["vote_acc"] = _round(sum(all_vote_labels) / len(items))
     row["vote_coverage"] = _round(len(vote_labels) / len(items))
     row["vote_scored_acc"] = _round(sum(vote_labels) / len(vote_labels)) if vote_labels else None
-    for rule in RULES:
+    for rule in rules:
         stats = scored(pooled[rule], vote_labels, ranks[rule])
         for metric in METRICS:
             row[f"{rule}_{metric}"] = _round(stats[metric])

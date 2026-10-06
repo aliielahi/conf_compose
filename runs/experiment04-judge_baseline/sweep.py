@@ -10,7 +10,7 @@ from argparse import Namespace
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from conf_compose.constants import RESULTS_DIR
+from conf_compose.constants import COMPOSITION_PANELS, RESULTS_DIR
 from conf_compose.pipelines.inference import STORE
 
 NAME = "experiment04-judge_baseline"
@@ -19,23 +19,7 @@ _spec = importlib.util.spec_from_file_location("jrun", Path(__file__).with_name(
 jrun = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(jrun)
 
-PANELS = [
-    ["q3-8bi", "l31-8bi"],
-    ["g2-9i", "phi4mii"],
-    ["q3-4bi", "q3-8bi"],
-    ["g2-9i", "g3-12i"],
-    ["q3-8bi", "g2-9i", "phi4mii"],
-    ["q3-4bi", "q3-8bi", "l31-8bi"],
-    ["q3-4bi", "l31-8bi", "g3-12i"],
-    ["g2-9i", "g3-12i", "phi4mii"],
-    ["q3-8bi", "l31-8bi", "g2-9i", "phi4mii"],
-    ["q3-4bi", "q3-8bi", "l31-8bi", "g2-9i"],
-    ["q3-8bi", "l31-8bi", "g3-12i", "phi4mii"],
-    ["q3-4bi", "q3-8bi", "l31-8bi", "g2-9i", "phi4mii"],
-    ["q3-4bi", "q3-8bi", "l32-3bi", "l31-8bi", "g2-9i"],
-    ["q3-4bi", "q3-8bi", "l31-8bi", "g2-9i", "g3-12i", "phi4mii"],
-    ["q3-4bi", "q3-8bi", "l32-3bi", "l31-8bi", "g2-9i", "phi4mii"],
-]
+PANELS = COMPOSITION_PANELS
 JUDGES = ["vllm/g3-27i", "vllm/l32-3bi"]
 # Cheapest split first, so an interrupted night still leaves whole datasets finished.
 TASKS = ["gpqa", "truthfulqa", "csqa", "gsm8k", "boolq"]
