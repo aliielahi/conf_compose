@@ -22,12 +22,13 @@ SHORT = {"consistency": "cons", "verification": "ver", "verbalized": "verb", "se
          "ver_target": "vertgt"}
 
 
-def atomic_consistency_row(task, items, models: Sequence[str], samples: int = 5) -> Dict[str, Any]:
+def atomic_consistency_row(task, items, models: Sequence[str], samples: int = 5,
+                           tie_break: str = "first") -> Dict[str, Any]:
     """One exact panel: members rate their own answers; pooled scores rate this panel's vote.
 
     Accuracy uses every supplied question (missing answers are incorrect). Confidence metrics
     use available scores, with separate coverage. No parameters are fitted. Model/list order is
-    preserved, and the existing majority rule breaks ties in agent order.
+    preserved. `tie_break` is "first" for agent order or "confidence" for the most confident side.
     """
     if not items or not models or len(set(models)) != len(models) or samples < 1:
         raise ValueError("atomic reporting needs examples, distinct models and a positive sample count")
@@ -57,7 +58,8 @@ def atomic_consistency_row(task, items, models: Sequence[str], samples: int = 5)
                 single_scores[i].append(score)
                 single_labels[i].append(correct)
 
-        target = majority_answer(task, streams)
+        own = {s.stream_id: (sup.binary(s.answer) if sup else None) for s, sup in zip(streams, supports)}
+        target = majority_answer(task, streams, own if tie_break == "confidence" else None)
         if target is None:
             continue
         correct = int(task.is_correct(target, example))
@@ -101,7 +103,8 @@ def atomic_consistency_row(task, items, models: Sequence[str], samples: int = 5)
         **{f"pooling_{metric}": [pooled[rule][metric] for rule in RULE_ORDER]
            for metric in ("auroc", "brier", "nll")},
         "estimator": "consistency", "selection": "majority", "smoothing": "add_half",
-        "calibration": "none", "tie_break": "first_model_in_cli_order",
+        "calibration": "none",
+        "tie_break": "max_own_consistency" if tie_break == "confidence" else "first_model_in_cli_order",
     }
 
 

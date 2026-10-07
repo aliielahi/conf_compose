@@ -36,6 +36,8 @@ def add_common_arguments(parser):
     parser.add_argument("--fit-seed", type=int, default=0)
     parser.add_argument("--fit-split", choices=("holdout", "validation"), default="holdout")
     parser.add_argument("--samples", type=int, default=5)
+    parser.add_argument("--tie-break", choices=("first", "confidence"), default="confidence")
+    parser.add_argument("--tie-seed", type=int, default=0)
     parser.add_argument("--context", choices=("direct", "reasoned"), default="direct")
     parser.add_argument("--seq-score", choices=("norm_sum", "norm_mean"), default="norm_sum")
     parser.add_argument("--match", default="", help="select saved cells by folder substring")
@@ -162,10 +164,42 @@ def confidence_scores(task, item, args, records):
             return None
         return supports[stream.model].binary(target)
 
-    target = majority_answer(task, streams)
+    target, _ = selected_answer(task, item, args, supports)
     own = [confidence(stream, stream.answer) for stream in streams]
     shared = [confidence(stream, target) for stream in streams]
     return target, own, shared
+
+
+def selected_answer(task, item, args, supports=None):
+    streams = item.round_streams((0,))
+    candidates = candidate_set(task, item, streams)
+    tie_break = getattr(args, "tie_break", "first")
+    if tie_break not in ("first", "confidence"):
+        raise ValueError(f"unknown tie-break rule: {tie_break}")
+    if not candidates:
+        return None, "no_answer"
+    counts = {candidate: sum(stream.answer is not None and task.equivalent(stream.answer, candidate)
+                             for stream in streams) for candidate in candidates}
+    tied = [candidate for candidate in candidates if counts[candidate] == max(counts.values())]
+    if tie_break == "first":
+        return majority_answer(task, streams), "first" if len(tied) > 1 else "count"
+    supports = supports or {stream.model: support(task, stream, candidates, args.samples) for stream in streams}
+    weights = {stream.stream_id: supports[stream.model].binary(stream.answer)
+               if len(stream.samples) >= args.samples else None for stream in streams}
+    unavailable = any(weights[stream.stream_id] is None for stream in streams
+                      if stream.answer is not None and any(task.equivalent(stream.answer, candidate) for candidate in tied))
+    tie_key = json.dumps([getattr(args, "tie_seed", 0), task.name, item.example_id,
+                          sorted(stream.model for stream in streams)])
+    reason = "count"
+    if len(tied) > 1:
+        reason = "missing_consistency_seeded" if unavailable else "confidence"
+        if not unavailable:
+            totals = [round(sum(weights[stream.stream_id] for stream in streams
+                                if stream.answer is not None and task.equivalent(stream.answer, candidate)), 12)
+                      for candidate in tied]
+            if totals.count(max(totals)) > 1:
+                reason = "equal_confidence_seeded"
+    return majority_answer(task, streams, None if unavailable else weights, tie_key=tie_key), reason
 
 
 def id_digest(ids):
@@ -255,6 +289,9 @@ def run_task(task_name, args, items=None, records=None, fitting=None, fitting_re
            "seq_score": args.seq_score if args.estimator == "seq" else "",
            "match": args.match, "voter": args.voter, "n_samples": args.samples,
            "n_total": n_total, "n_examples": len(items), "n_voted": len(vote_labels),
+           "tie_break": getattr(args, "tie_break", "first"), "tie_seed": getattr(args, "tie_seed", 0),
+           "selection_signal": "consistency_t0.7", "selection_smoothing": "add_half",
+           "logistic_l2": getattr(args, "logistic_l2", 1.0),
            "fit_split": args.fit_split,
            "fit_fraction": args.fit_fraction if args.fit_split == "holdout" else None,
            "fit_seed": args.fit_seed if args.fit_split == "holdout" else None,

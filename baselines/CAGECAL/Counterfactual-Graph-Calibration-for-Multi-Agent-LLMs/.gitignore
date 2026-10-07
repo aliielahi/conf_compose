@@ -5,3 +5,7 @@ results/
 cache/
 *.egg-info/
 .venv/
+
+# Saved-inference voting adapter (local/GPU artifacts)
+.cache-voting/
+.venv-voting/

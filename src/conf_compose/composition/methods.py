@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from typing import Dict, List, Optional, Sequence
 
 from .candidates import (OTHER, Support, candidate_set, softmax, state_space, support)
@@ -72,14 +74,29 @@ def selection_methods(task, item: Item, streams: Sequence[Stream], budget: Optio
     return methods
 
 
-def majority_answer(task, streams: Sequence[Stream]) -> Optional[str]:
-    """Ordinary main-answer majority vote, ties broken by first proposal order."""
+def majority_answer(task, streams: Sequence[Stream],
+                    confidences: Optional[Dict[str, Optional[float]]] = None,
+                    tie_key: Optional[str] = None) -> Optional[str]:
+    """Main-answer majority vote; a tie goes to the most confident side, or to first proposal order.
+
+    `confidences` maps stream_id to that stream's confidence in its own answer. Counts still
+    decide first, so this only changes examples the count leaves tied.
+    """
     votes = [s for s in streams if s.answer is not None]
     if not votes:
         return None
     candidates = candidate_set(task, None, streams)
     counts = {c: sum(task.equivalent(s.answer, c) for s in votes) for c in candidates}
-    return max(candidates, key=lambda c: (counts[c], -candidates.index(c)))
+    weights = {c: sum((confidences or {}).get(s.stream_id) or 0.0
+                      for s in votes if task.equivalent(s.answer, c)) for c in candidates}
+    def fallback(candidate):
+        if tie_key is None:
+            return -candidates.index(candidate)
+        aliases = sorted({str(stream.answer) for stream in votes if task.equivalent(stream.answer, candidate)})
+        payload = json.dumps([tie_key, aliases], separators=(",", ":")).encode()
+        return int.from_bytes(hashlib.sha256(payload).digest(), "big")
+
+    return max(candidates, key=lambda c: (counts[c], round(weights[c], 12), fallback(c)))
 
 
 def _select(candidates: Sequence[str], distribution: Dict[str, float]) -> Prediction:

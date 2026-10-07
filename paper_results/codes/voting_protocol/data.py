@@ -10,10 +10,11 @@ import numpy as np
 
 from conf_compose.composition.pooling import FittedBLP, FittedPool, pool_methods
 from conf_compose.constants import ROOT
-from conf_compose.data import get_task
-from conf_compose.utils.metrics import auarc, ece
+from conf_compose.data import Example, get_task
+from conf_compose.utils.metrics import auarc, auroc, brier, ece, nll
 
-METRICS = ("ece", "auarc")
+METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
+LOWER_IS_BETTER = {"ece", "brier", "nll"}
 METHODS = {
     "mean": "Arithmetic mean",
     "logodds_sum": "Log-odds sum",
@@ -72,6 +73,8 @@ def load_csvs(directory, estimators):
 
 
 def index_judges(directory, judges):
+    if not directory.is_dir():
+        raise FileNotFoundError(f"judge directory does not exist: {directory}; set --judge-dir to the downloaded results")
     result = {}
     for path in sorted(directory.glob("*/*/manifest.json")):
         manifest = json.loads(path.read_text())
@@ -89,6 +92,10 @@ def index_judges(directory, judges):
             raise ValueError(f"ambiguous judge cells: {result[key]} and {path}")
         if path.with_name("verdicts.jsonl").exists() and path.with_name("metrics.json").exists():
             result[key] = path
+    found = {key[2] for key in result}
+    absent = set(judges) - found
+    if absent:
+        raise ValueError(f"no completed judge cells for {sorted(absent)} in {directory}")
     return result
 
 
@@ -116,17 +123,38 @@ def valid_probability(value):
 
 
 def metric_values(scores, correct, ranks=None):
-    return {"ece": float(ece(scores, correct)),
-            "auarc": float(auarc(scores if ranks is None else ranks, correct))}
+    probabilities = np.round(np.asarray(scores, dtype=float), 12)
+    ranking = np.round(np.asarray(scores if ranks is None else ranks, dtype=float), 12)
+    values = {"accuracy": float(np.mean(correct)), "ece": float(ece(probabilities, correct)),
+              "auarc": float(auarc(ranking, correct)), "auroc": float(auroc(ranking, correct)),
+              "brier": float(brier(probabilities, correct)), "nll": float(nll(probabilities, correct))}
+    return {key: value if math.isfinite(value) else None for key, value in values.items()}
 
 
-def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy):
-    if mode == "metric_best":
-        return {"ece": min(range(len(solo_metrics)), key=lambda index: solo_metrics[index]["ece"]),
-                "auarc": max(range(len(solo_metrics)), key=lambda index: solo_metrics[index]["auarc"])}
+def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics=None):
+    if mode == "fit_metric":
+        if not fitting_metrics or any(value is None for value in fitting_metrics):
+            raise ValueError("best fitting-metric reference requires scored fitting questions for every member")
+        solo_metrics = fitting_metrics
+    available = set(solo_metrics[0])
+    if mode in ("metric_best", "fit_metric"):
+        indices = {}
+        for metric in METRICS:
+            if metric == "accuracy":
+                accuracy = fitting_accuracy if mode == "fit_metric" else solo_accuracy
+                indices[metric] = max(range(len(accuracy)), key=lambda index: accuracy[index])
+            elif metric in available:
+                candidates = [index for index, values in enumerate(solo_metrics) if values[metric] is not None]
+                if not candidates:
+                    indices[metric] = 0
+                else:
+                    choose = min if metric in LOWER_IS_BETTER else max
+                    indices[metric] = choose(candidates, key=lambda index: solo_metrics[index][metric])
+        return indices
     accuracy = fitting_accuracy if mode == "fit_accuracy" else solo_accuracy
     selected = max(range(len(accuracy)), key=lambda index: accuracy[index])
     return dict.fromkeys(METRICS, selected)
+
 
 
 class SourceStore:
@@ -161,10 +189,11 @@ def row_arguments(row, store):
                            voter=int(row["voter"]), samples=int(row["n_samples"]),
                            estimator=row["estimator"], context=row["context"] or "direct",
                            seq_score=row["seq_score"] or "norm_sum", all_signals=True,
-                           no_verbalized=False)
+                           no_verbalized=False, tie_break=row.get("tie_break", "first"),
+                           tie_seed=int(row.get("tie_seed", 0)))
 
 
-def process_cell(row, sources, judge_index, judges, methods, reference):
+def process_cell(row, sources, judge_index, judges, methods, reference, judge_policy="strict"):
     atomic = atomic_module()
     group = json.loads(row["model_ids"])
     args = row_arguments(row, sources.directory)
@@ -183,6 +212,16 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
             raise ValueError(f"{name} IDs do not match saved pooling run for {row['task']}/{row['models']}")
     fitting_accuracy = [sum(bool(fitting_records[model][item.example_id]["correct"]) for item in fitting) / len(fitting)
                         for model in group]
+    fitting_scores = [[] for _ in group]
+    fitting_labels = [[] for _ in group]
+    for item in fitting:
+        _, own, _ = atomic.confidence_scores(task, item, args, fitting_records)
+        if all(valid_probability(score) for score in own):
+            for index, model in enumerate(group):
+                fitting_scores[index].append(own[index])
+                fitting_labels[index].append(float(fitting_records[model][item.example_id]["correct"]))
+    fitting_metrics = [metric_values(scores, labels) if scores else None
+                       for scores, labels in zip(fitting_scores, fitting_labels)]
     judge_rows, missing, judge_sources = {}, {}, {}
     panel = tuple(model.split("/")[-1] for model in group)
     for judge in judges:
@@ -210,15 +249,20 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
     solo = [[] for _ in group]
     solo_labels = [[] for _ in group]
     labels, retained_ids, scored_ids = [], [], []
+    judge_mismatches = {method: [] for method in judge_rows}
+    old_targets, new_targets, selection_reasons = {}, {}, {}
     exclusions = {"source": 0, "judge": 0}
     replay_values = {method: [] for method in active_methods}
     replay_ranks = {method: [] for method in active_methods}
     replay_labels = []
     for item in evaluation:
         target, own, scores = atomic.confidence_scores(task, item, args, records)
+        legacy_args = SimpleNamespace(**{**vars(args), "tie_break": "first"})
+        old_targets[item.example_id] = atomic.confidence_scores(task, item, legacy_args, records)[0]
+        new_targets[item.example_id] = target
+        _, selection_reasons[item.example_id] = atomic.selected_answer(task, item, args)
         original_label = None
         if target is not None and all(valid_probability(score) for score in scores):
-            from conf_compose.data import Example
             original_label = float(task.is_correct(target, Example(item.example_id, item.question, item.gold)))
             scored_ids.append(item.example_id)
             predictions = pool_methods(scores)
@@ -235,8 +279,13 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
             verdict = verdicts.get(item.example_id)
             if verdict is None:
                 continue
-            if not task.equivalent(verdict["final_answer"], target) or bool(verdict["correct"]) != bool(original_label):
-                raise ValueError(f"judge answer/label differs from majority: {method}/{item.example_id}")
+            if not task.equivalent(verdict["final_answer"], target):
+                if judge_policy == "strict":
+                    raise ValueError(f"judge answer/label differs from majority: {method}/{item.example_id}")
+                if valid_probability(verdict.get("verbalized")):
+                    judge_mismatches[method].append(item.example_id)
+            elif bool(verdict["correct"]) != bool(original_label):
+                raise ValueError(f"judge correctness label differs for the same answer: {method}/{item.example_id}")
             if valid_probability(verdict.get("verbalized")):
                 selected_judges[method] = float(verdict["verbalized"])
         if len(selected_judges) != len(judge_rows):
@@ -255,13 +304,17 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
             rankings[method].append(value)
     if atomic.id_digest(scored_ids) != row["eval_scored_ids_hash"]:
         raise ValueError("scored question IDs differ from saved pooling results")
+    replay_differences = {}
     for method in active_methods:
         if not replay_values[method]:
             continue
         replay = metric_values(replay_values[method], replay_labels, replay_ranks[method])
-        for metric, value in replay.items():
-            if abs(value - float(row[f"{method}_{metric}"])) > 0.000051:
-                raise ValueError(f"cannot reproduce saved {method}/{metric}: {value} vs {row[f'{method}_{metric}']}")
+        replay_differences[method] = {metric: value - float(row[f"{method}_{metric}"])
+                                      for metric, value in replay.items() if metric != "accuracy"
+                                      and value is not None and row.get(f"{method}_{metric}") not in (None, "")}
+    expected_accuracy = float(row["vote_scored_acc"])
+    if replay_labels and abs(float(np.mean(replay_labels)) - expected_accuracy) > 0.000051:
+        raise ValueError("reconstructed vote accuracy differs from the saved run")
     metadata = {"task": row["task"], "estimator": row["estimator"], "models": row["models"],
                 "n_models": len(group), "n_samples": int(row["n_samples"]),
                 "n_evaluation": len(evaluation), "n_matched": len(labels),
@@ -269,13 +322,20 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
                 "fit_ids_hash": row["fit_ids_hash"], "eval_ids_hash": row["eval_ids_hash"],
                 "matched_ids_hash": atomic.id_digest(retained_ids), "matched_ids": retained_ids,
                 "judge_sources": judge_sources, "missing": missing, "source_code_hash": row["code_hash"],
-                "fitting_accuracy": dict(zip(group, fitting_accuracy)), "reference_mode": reference}
+                "replay_minus_csv": replay_differences, "numerical_precision": 12,
+                "fitting_accuracy": dict(zip(group, fitting_accuracy)),
+                "fitting_solo_metrics": dict(zip(group, fitting_metrics)), "reference_mode": reference,
+                "tie_break": args.tie_break, "tie_seed": args.tie_seed, "judge_policy": judge_policy,
+                "old_targets": old_targets, "selected_targets": new_targets, "selection_reasons": selection_reasons,
+                "n_changed_targets": sum(not task.equivalent(old_targets[key], value) for key, value in new_targets.items()),
+                "judge_target_mismatch_ids": {method: [key for key in ids if key in set(retained_ids)]
+                                              for method, ids in judge_mismatches.items()}}
     if not labels:
         metadata["missing"].update({method: "no common scored questions" for method in values})
         return [], metadata
     solo_metrics = [metric_values(scores, correct) for scores, correct in zip(solo, solo_labels)]
     solo_accuracy = [float(np.mean(correct)) for correct in solo_labels]
-    indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy)
+    indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics)
     baseline = {metric: solo_metrics[indices[metric]][metric] for metric in METRICS}
     metadata["reference_models"] = {metric: group[indices[metric]] for metric in METRICS}
     metadata["solo_metrics"] = {model: {**solo_metrics[index], "accuracy": solo_accuracy[index]} for index, model in enumerate(group)}
@@ -284,12 +344,15 @@ def process_cell(row, sources, judge_index, judges, methods, reference):
     for method in ["best_solo", *values]:
         metrics = baseline if method == "best_solo" else metric_values(values[method], labels, rankings[method])
         entry = {key: metadata[key] for key in ("task", "estimator", "models", "n_models", "n_matched", "coverage", "reference_mode")}
-        entry.update(method=method, accuracy=None if method == "best_solo" and reference == "metric_best" else
-                     (solo_accuracy[indices["ece"]] if method == "best_solo" else metadata["vote_accuracy"]))
+        entry.update(method=method, tie_break=args.tie_break, tie_seed=args.tie_seed,
+                     judge_approximate=method.startswith("judge:") and judge_policy == "approximate",
+                     judge_target_mismatches=len(metadata["judge_target_mismatch_ids"].get(method, [])))
         for metric in METRICS:
             entry[metric] = metrics[metric]
             entry[f"reference_{metric}"] = baseline[metric]
-            entry[f"delta_{metric}"] = metrics[metric] - baseline[metric]
+            entry[f"delta_{metric}"] = (metrics[metric] - baseline[metric]
+                                         if metrics[metric] is not None and baseline[metric] is not None else None)
             entry[f"reference_{metric}_model"] = group[indices[metric]]
+            entry[f"reference_{metric}_accuracy"] = solo_accuracy[indices[metric]]
         output.append(entry)
     return output, metadata
