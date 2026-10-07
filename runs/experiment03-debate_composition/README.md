@@ -18,7 +18,7 @@ with, or keeps its own answer without restating it, is still resolved, and `answ
 ```bash
 bash runs/experiment03-debate_composition/sweep.sh                     # all tasks, 15 groups, 1 round
 EXTRA="--dry-run --count-tokens" bash runs/experiment03-debate_composition/sweep.sh   # plan + prompt lengths
-TASKS=csqa GROUPS="1 6 14" ROUNDS=2 LIMIT=20 bash runs/experiment03-debate_composition/sweep.sh   # smoke
+TASKS=csqa GROUP_IDS="1 6 14" ROUNDS=2 LIMIT=20 bash runs/experiment03-debate_composition/sweep.sh   # smoke
 python runs/experiment03-debate_composition/check.py --match _n20          # inspect
 ```
 

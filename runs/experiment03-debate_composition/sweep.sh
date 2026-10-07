@@ -6,7 +6,7 @@
 #   <stage>_round<r>_<model>.log   one per model step                         run.pid   for stop    DONE   on finish
 # Usage: bash runs/experiment03-debate_composition/sweep.sh          start, detached
 #        bash runs/experiment03-debate_composition/sweep.sh stop     stop a running sweep
-#   TASKS="gpqa csqa"   GROUPS="1 2 3"   ROUNDS=2   LIMIT=20   STAGE=generate|score
+#   TASKS="gpqa csqa"   GROUP_IDS="1 2 3"   ROUNDS=2   LIMIT=20   STAGE=generate|score
 #   EXTRA="--dry-run"   print the plan and exit       EXTRA="--dry-run --count-tokens"   also count prompt tokens
 #   FOREGROUND=1        do not detach
 set -uo pipefail
@@ -54,7 +54,7 @@ if [ -z "${SWEEP_DETACHED:-}" ] && [ "${FOREGROUND:-0}" != "1" ]; then
     echo "already running as pid $(cut -d' ' -f1 "$PIDFILE"); stop it first" >&2; exit 1
   fi
   rm -f "$PIDFILE" "$LOG_DIR/DONE"
-  export SWEEP_DETACHED=1 TASKS ROUNDS STAGE GROUPS="${GROUPS:-}" LIMIT="${LIMIT:-}" EXTRA="${EXTRA:-}"
+  export SWEEP_DETACHED=1 TASKS ROUNDS STAGE GROUP_IDS="${GROUP_IDS:-}" LIMIT="${LIMIT:-}" EXTRA="${EXTRA:-}"
   if command -v setsid > /dev/null 2>&1; then
     setsid bash "$0" < /dev/null > "$LOG_DIR/run.log" 2>&1 &
   else
@@ -70,7 +70,7 @@ if [ -z "${SWEEP_DETACHED:-}" ] && [ "${FOREGROUND:-0}" != "1" ]; then
   exit 0
 fi
 
-ARGS="--tasks $TASKS --rounds $ROUNDS --stage $STAGE ${GROUPS:+--groups $GROUPS} ${LIMIT:+--limit $LIMIT} ${EXTRA:-}"
+ARGS="--tasks $TASKS --rounds $ROUNDS --stage $STAGE ${GROUP_IDS:+--groups $GROUP_IDS} ${LIMIT:+--limit $LIMIT} ${EXTRA:-}"
 if [ -n "${DRY:-}" ]; then
   exec python runs/experiment03-debate_composition/run.py $ARGS
 fi
@@ -78,7 +78,7 @@ fi
 echo "$$ $(ps -o pgid= -p $$ | tr -d ' ')" > "$PIDFILE"
 trap 'note "SHELL    received a signal, exiting"; echo stopped > "$LOG_DIR/DONE"; rm -f "$PIDFILE"; exit 143' INT TERM
 
-note "SHELL    sweep.sh starting (pid $$): tasks=$TASKS rounds=$ROUNDS stage=$STAGE groups=${GROUPS:-all} limit=${LIMIT:-full}"
+note "SHELL    sweep.sh starting (pid $$): tasks=$TASKS rounds=$ROUNDS stage=$STAGE groups=${GROUP_IDS:-all} limit=${LIMIT:-full}"
 python runs/experiment03-debate_composition/run.py $ARGS
 STATUS=$?
 note "SHELL    sweep.sh done (exit $STATUS)"

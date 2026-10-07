@@ -43,7 +43,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks", nargs="+", default=DEFAULT_TASKS, choices=sorted(TASKS))
     parser.add_argument("--groups", nargs="+", type=int, default=list(range(1, len(GROUPS) + 1)),
-                        help="1-based indices into the 15 voting groups")
+                        choices=range(1, len(GROUPS) + 1), metavar="1-15", help="indices into the 15 voting groups")
     parser.add_argument("--rounds", type=int, default=1, help="revision rounds after round 0")
     parser.add_argument("--stage", choices=("all", "generate", "score"), default="all")
     parser.add_argument("--limit", type=int, help="first N questions per task, in a separate cell")
@@ -158,9 +158,10 @@ def count_tokens(args, all_cells):
             jobs = [s for s in all_cells if s.task == task_name and model in s.group]
             turns = [turn for settings in jobs
                      for turn in build_turns(task, settings, model, 1, args.store, args.out_dir)]
-            lengths = [len(tokenizer.apply_chat_template(turn["messages"], add_generation_prompt=True,
-                                                         **CHAT_TEMPLATE_KWARGS.get(model, {})))
-                       for turn in turns]
+            # Rendered to text, then encoded without special tokens: exactly how the engine counts and sends it.
+            texts = [tokenizer.apply_chat_template(turn["messages"], tokenize=False, add_generation_prompt=True,
+                                                   **CHAT_TEMPLATE_KWARGS.get(model, {})) for turn in turns]
+            lengths = [len(ids) for ids in tokenizer(texts, add_special_tokens=False)["input_ids"]] if texts else []
             budget = jobs[0].max_tokens
             capped = sum(context - n < budget for n in lengths)
             overflow = sum(context - n < MIN_OUTPUT for n in lengths)
