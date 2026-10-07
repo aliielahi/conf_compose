@@ -8,6 +8,8 @@ IMAGE=${IMAGE:-conf_compose:latest}
 NAME=${NAME:-conf_compose}
 # Model weights are tens of GB; keep them off the root disk.
 HF_CACHE=${HF_CACHE:-$HOME/.cache/huggingface}
+# The large data disk, mounted at the same path so symlinks into it resolve on the host and in the container.
+DATA_DIR=${DATA_DIR:-/mnt/data}
 
 case "${1:-shell}" in
   build)
@@ -25,6 +27,7 @@ case "${1:-shell}" in
       --gpus all --shm-size=32g --ipc=host \
       -v "$PWD":/workspace \
       -v "$HF_CACHE":/root/.cache/huggingface \
+      $([ -d "$DATA_DIR" ] && echo "-v $DATA_DIR:$DATA_DIR") \
       $([ -f .env ] && echo "--env-file .env") \
       -w /workspace "$IMAGE"
     docker exec "$NAME" pip install --no-cache-dir -q -e . --no-deps
