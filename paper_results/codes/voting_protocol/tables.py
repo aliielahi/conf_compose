@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from statistics import mean
+from statistics import mean, stdev
 
 METRICS = ("ece", "auarc")
 FULL_METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
@@ -9,7 +9,7 @@ LOWER_IS_BETTER = {"ece", "brier", "nll"}
 DATASET_NAMES = {"csqa": "CSQA", "boolq": "BoolQ", "gsm8k": "GSM8K", "truthfulqa": "TruthfulQA", "gpqa": "GPQA"}
 
 
-def aggregate(rows, cells, estimator, size, methods, tasks, delta, metrics=METRICS):
+def aggregate(rows, cells, estimator, size, methods, tasks, delta, metrics=METRICS, spread=False):
     values = {}
     for task in tasks:
         expected = sum(cell["estimator"] == estimator and cell["task"] == task
@@ -20,7 +20,10 @@ def aggregate(rows, cells, estimator, size, methods, tasks, delta, metrics=METRI
             for metric in metrics:
                 key = f"delta_{metric}" if delta else metric
                 observed = [row[key] for row in selected if row.get(key) is not None]
-                values[(method, task, metric)] = (mean(observed) if observed else None, len(observed), expected)
+                summary = (mean(observed) if observed else None, len(observed), expected)
+                if spread:
+                    summary += (stdev(observed) if len(observed) >= 2 else None,)
+                values[(method, task, metric)] = summary
     return values
 
 
@@ -28,20 +31,23 @@ def escape(value):
     return str(value).replace("\\", r"\textbackslash{}").replace("_", r"\_").replace("&", r"\&").replace("%", r"\%")
 
 
-def display(value, available, expected, delta, latex=False, metric="ece"):
+def display(value, available, expected, sd=None, *, delta, latex=False, metric="ece"):
     if value is None:
         return "--"
     scale, digits = (1, 3) if metric == "nll" else (100, 2)
     shown = round(scale * value, digits)
     shown = 0.0 if shown == 0 else shown
     text = f"{shown:+.{digits}f}" if delta else f"{shown:.{digits}f}"
+    if delta and sd is not None:
+        deviation = f"{scale * sd:.{digits}f}"
+        text += (r" {\scriptsize $\pm$ " + deviation + "}") if latex else " ± " + deviation
     return text
 
 
 def render_table(values, methods, tasks, title, delta, metrics=METRICS):
     metric_labels = [("Delta " if delta else "") + METRIC_NAMES[metric] for metric in metrics]
     headers = ["Method"] + [f"{DATASET_NAMES.get(task, task)} {metric}" for task in tasks for metric in metric_labels]
-    rows = [[label] + [display(*values[(method, task, metric)], delta, metric=metric)
+    rows = [[label] + [display(*values[(method, task, metric)], delta=delta, metric=metric)
                       for task in tasks for metric in metrics] for method, label in methods.items()]
     widths = [max(len(str(row[index])) for row in [headers, *rows]) for index in range(len(headers))]
     formatted = [" | ".join(value.ljust(width) for value, width in zip(row, widths)) for row in [headers, *rows]]
@@ -52,6 +58,9 @@ def render_table(values, methods, tasks, title, delta, metrics=METRICS):
              "Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.",
              "All present methods and solo models use the same scored questions within each group and estimator.",
              "Judge rows marked approximate reuse old scores, including changed targets; rerun before publication.", ""]
+    spread = delta and any(len(value) == 4 for value in values.values())
+    if spread:
+        notes.insert(-1, "Mean ± sample standard deviation of group-level deltas (ddof=1); descriptive variation, not a standard error or confidence interval. SD omitted for fewer than two groups.")
     text = "\n".join(notes + formatted) + "\n"
     latex = [r"\begin{tabular}{l" + "r" * (len(metrics) * len(tasks)) + "}", r"\toprule",
              "Method & " + " & ".join(rf"\multicolumn{{{len(metrics)}}}{{c}}{{" + escape(DATASET_NAMES.get(task, task)) + "}" for task in tasks) + r" \\"]
@@ -60,9 +69,13 @@ def render_table(values, methods, tasks, title, delta, metrics=METRICS):
     latex.append(" & " + " & ".join(labels * len(tasks)) + r" \\")
     latex.append(r"\midrule")
     for method, label in methods.items():
-        numbers = [display(*values[(method, task, metric)], delta, latex=True, metric=metric) for task in tasks for metric in metrics]
+        numbers = [display(*values[(method, task, metric)], delta=delta, latex=True, metric=metric) for task in tasks for metric in metrics]
         latex.append(escape(label) + " & " + " & ".join(numbers) + r" \\")
-    latex.extend([r"\bottomrule", r"\end{tabular}", ""])
+    latex.append(r"\bottomrule")
+    if spread:
+        latex.append(r"\multicolumn{" + str(1 + len(tasks) * len(metrics))
+                     + r"}{l}{\scriptsize Mean $\pm$ SD across groups (sample SD); descriptive, not a confidence interval.} \\")
+    latex.extend([r"\end{tabular}", ""])
     if any("approx." in label for label in methods.values()):
         latex.insert(0, "% Approximate judge rows reuse scores elicited for old targets; regenerate before publication.")
     latex.insert(0, "% Units: x100 except NLL (nats). Deltas are calculated within groups before averaging.")
@@ -80,7 +93,7 @@ def write_tables(directory, rows, cells, estimators, methods, tasks):
                 for delta in (True, False):
                     kind = "delta" if delta else "absolute"
                     title = f"Voting protocol / {estimator} / {scope} / {kind}"
-                    values = aggregate(rows, cells, estimator, size, methods, tasks, delta, metrics)
+                    values = aggregate(rows, cells, estimator, size, methods, tasks, delta, metrics, spread=delta)
                     text, latex = render_table(values, methods, tasks, title, delta, metrics)
                     for suffix, content in (("txt", text), ("tex", latex)):
                         path = target / f"{scope}{tag}_{kind}.{suffix}"

@@ -124,14 +124,14 @@ fresh `--output-root` within this baseline repository.
 - `seed_*.pt`, `seed_*_training.json`, `seed_*_predictions.npz`: checkpoints,
   validation-selection history and seed-level predictions.
 - `predictions.jsonl`: fixed vote, correctness, raw/BetaSB probability, all seeds.
-- `calibration.json`, `calibrators.pkl`: component fits/fallbacks and saved objects.
+- `calibration.json`, `calibration_inputs.npz`: component fits/fallbacks and numerical
+  calibration inputs/outputs for replay. Calibrators containing closures are not pickled.
 - `paper_tables/cagecal_metrics.csv`: exact per-task, per-panel ECE, AUARC, AUROC,
   Brier, NLL, accuracy and coverage for both CAGE rows.
 - `paper_tables/atomic.csv`: original table rows plus the CAGE rows.
 - `paper_tables/{cons,seq}/*.tex` and `*.txt`: augmented table copies in the
   existing paper format, including individual panel sizes and coverage.
 
-`calibrators.pkl` is your own local artifact; only load trusted pickle files.
 The parent `paper_results` directory is never rewritten. Copy the generated
 LaTeX tables to Overleaf after checking the atomic rows. No significance claim
 is inferred from these point estimates.
@@ -149,3 +149,15 @@ and PyG are installed; otherwise it is explicitly skipped. `--audit-only` uses
 only the standard library and the parent project's task parsers, performs no
 inference, and writes no output files. Training and MiniLM downloads are left to
 the GPU environment.
+
+If training completed but calibration/export failed, copy the updated adapter and run:
+
+```bash
+python -B -m voting_adapter.run --finish-only results/voting_adapter/<original-digest>
+```
+
+This restores the saved run configuration, verifies input hashes and prediction
+row order, and finishes from `seed_*_predictions.npz`. It does not train, load
+checkpoints, download models or require a GPU. The original training manifest
+is preserved; `postprocessing.json` records the repair code and runtime. An old
+partial `calibrators.pkl` file is ignored.

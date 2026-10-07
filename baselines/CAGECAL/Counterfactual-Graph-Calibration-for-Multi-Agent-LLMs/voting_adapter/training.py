@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 import random
 import sys
 import time
@@ -190,7 +189,7 @@ def calibrate(pval, peval, validation, evaluation, tasks, run_dir):
     from betacal import BetaCalibration
     from calibration import PlattBinnerCalibrator
     output = peval.copy()
-    states, fitted = {}, {}
+    states = {}
     for task in tasks:
         vi = np.asarray([e["row"]["task"] == task for e in validation])
         ti = np.asarray([e["row"]["task"] == task for e in evaluation])
@@ -213,7 +212,6 @@ def calibrate(pval, peval, validation, evaluation, tasks, run_dir):
                     pred = np.asarray(cal.calibrate(peval[ti]), dtype=float)
                 if not np.isfinite(pred).all() or ((pred < 0) | (pred > 1)).any():
                     raise ValueError("Calibration returned invalid probabilities")
-                fitted[(task, name)] = cal
                 predictions.append(pred)
                 states[task]["components"].append(name)
             except (ValueError, RuntimeError, FloatingPointError, AssertionError, np.linalg.LinAlgError) as exc:
@@ -223,8 +221,17 @@ def calibrate(pval, peval, validation, evaluation, tasks, run_dir):
         else:
             states[task]["fallback"] = "identity: both calibration fits failed"
     (run_dir / "calibration.json").write_text(json.dumps(states, indent=2))
-    with (run_dir / "calibrators.pkl").open("wb") as f:
-        pickle.dump(fitted, f)
+    # PlattBinnerCalibrator contains a local closure and cannot be pickled.
+    # Persist numerical replay inputs instead of interpreter-specific objects.
+    tmp = run_dir / "calibration_inputs.partial.npz"
+    np.savez_compressed(tmp, validation_probabilities=pval, evaluation_probabilities=peval,
+        validation_labels=np.asarray([e["row"]["correct"] for e in validation]),
+        validation_tasks=np.asarray([e["row"]["task"] for e in validation]),
+        validation_ids=np.asarray([e["row"]["id"] for e in validation]),
+        evaluation_tasks=np.asarray([e["row"]["task"] for e in evaluation]),
+        evaluation_ids=np.asarray([e["row"]["id"] for e in evaluation]),
+        calibrated_probabilities=output)
+    tmp.replace(run_dir / "calibration_inputs.npz")
     return output
 
 
@@ -246,9 +253,16 @@ def run_training(bundle, args, run_dir):
         val_preds.append(pv)
         eval_preds.append(pt)
         del model
+    path = finalize_predictions(datasets, val_preds, eval_preds, tasks, args.split_seed, run_dir)
+    (run_dir / "timing.json").write_text(json.dumps(dict(feature_seconds=prepared - started,
+        training_and_prediction_seconds=time.monotonic() - prepared)))
+    return path
+
+
+def finalize_predictions(datasets, val_preds, eval_preds, tasks, split_seed, run_dir):
     raw = np.mean(eval_preds, axis=0)
     pv = np.mean(val_preds, axis=0)
-    np.random.seed(args.split_seed)
+    np.random.seed(split_seed)
     adjusted = calibrate(pv, raw, datasets["validation"], datasets["evaluation"], tasks, run_dir)
     path = run_dir / "predictions.jsonl"
     tmp = run_dir / "predictions.partial.jsonl"
@@ -260,6 +274,35 @@ def run_training(bundle, args, run_dir):
                        per_seed=[float(p[i]) for p in eval_preds])
             f.write(json.dumps(row) + "\n")
     tmp.replace(path)
-    (run_dir / "timing.json").write_text(json.dumps(dict(feature_seconds=prepared - started,
-        training_and_prediction_seconds=time.monotonic() - prepared)))
     return path
+
+
+def finish_saved(bundle, args, run_dir):
+    """Finish calibration/export from saved arrays; never import Torch or train.
+
+    Older seed arrays have no IDs, so validate their exact row ordering against
+    the saved feature ledger before interpreting their values.
+    """
+    datasets = {split: [dict(row=r) for r in bundle["rows"] if r["split"] == split]
+                for split in ("validation", "evaluation")}
+    seen = {split: [] for split in datasets}
+    with (run_dir / "features.jsonl").open() as f:
+        for line in f:
+            row = json.loads(line)
+            if row["split"] in seen:
+                seen[row["split"]].append(tuple(row[k] for k in ("task", "models", "id", "target")))
+    for split, examples in datasets.items():
+        expected = [tuple(e["row"][k] for k in ("task", "models", "id", "target")) for e in examples]
+        if seen[split] != expected:
+            raise ValueError(f"Saved {split} feature order/targets differ; cannot reuse prediction arrays")
+    val_preds, eval_preds = [], []
+    for seed in range(args.seeds):
+        path = run_dir / f"seed_{seed}_predictions.npz"
+        with np.load(path, allow_pickle=False) as saved:
+            pv, pt = saved["validation"].copy(), saved["evaluation"].copy()
+        for split, values in (("validation", pv), ("evaluation", pt)):
+            if values.shape != (len(datasets[split]),) or not np.isfinite(values).all() or ((values < 0) | (values > 1)).any():
+                raise ValueError(f"Invalid {split} predictions in {path}")
+        val_preds.append(pv)
+        eval_preds.append(pt)
+    return finalize_predictions(datasets, val_preds, eval_preds, sorted(bundle["splits"]), args.split_seed, run_dir)

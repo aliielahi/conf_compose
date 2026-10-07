@@ -1,0 +1,42 @@
+import unittest
+from statistics import stdev
+
+from tables import FULL_METRICS, aggregate, display, render_table
+
+
+class DeltaSpreadTest(unittest.TestCase):
+    def test_standard_deviation_uses_group_deltas(self):
+        cells = [{"estimator": "cons", "task": "csqa", "n_models": size} for size in (2, 2, 3, 3)]
+        deltas = [-0.3, -0.1, 0.1, 0.5]
+        rows = [{**cell, "method": "mean", "delta_ece": value} for cell, value in zip(cells, deltas)]
+        values = aggregate(rows, cells, "cons", None, ["mean"], ["csqa"], True, ("ece",), spread=True)
+        average, n, total, sd = values["mean", "csqa", "ece"]
+        self.assertAlmostEqual(average, 0.05)
+        self.assertEqual((n, total), (4, 4))
+        self.assertAlmostEqual(sd, stdev(deltas))
+        restricted = aggregate(rows, cells, "cons", 2, ["mean"], ["csqa"], True, ("ece",), spread=True)
+        self.assertAlmostEqual(restricted["mean", "csqa", "ece"][3], stdev(deltas[:2]))
+
+    def test_units_and_latex(self):
+        cell = {"estimator": "cons", "task": "csqa", "n_models": 2}
+        rows = [{**cell, "method": "mean", **{f"delta_{metric}": value for metric in FULL_METRICS}}
+                for value in (0.1, 0.2)]
+        values = aggregate(rows, [cell, cell], "cons", None, ["mean"], ["csqa"], True, FULL_METRICS, spread=True)
+        text, latex = render_table(values, {"mean": "Mean"}, ["csqa"], "test", True, FULL_METRICS)
+        self.assertIn('+15.00 ± 7.07', text)
+        self.assertIn('+0.150 ± 0.071', text)
+        self.assertIn(r'{\scriptsize $\pm$ 7.07}', latex)
+        self.assertIn('not a confidence interval', latex)
+
+    def test_missing_and_single_group(self):
+        self.assertEqual(display(None, 0, 15, None, delta=True), '--')
+        self.assertEqual(display(0.1, 1, 15, None, delta=True), '+10.00')
+        self.assertEqual(display(0, 15, 15, 0, delta=True), '+0.00 ± 0.00')
+
+    def test_absolute_unchanged(self):
+        self.assertEqual(display(0.1, 15, 15, 0.2, delta=False), '10.00')
+        self.assertEqual(display(0.1, 15, 15, 0.2, delta=False, metric='nll'), '0.100')
+
+
+if __name__ == '__main__':
+    unittest.main()

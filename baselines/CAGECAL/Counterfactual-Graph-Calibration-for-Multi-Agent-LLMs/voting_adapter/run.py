@@ -20,6 +20,7 @@ def arguments():
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--audit-only", action="store_true", help="Validate sources and print counts; no files/models")
     mode.add_argument("--report-only", type=Path, metavar="RUN_DIR", help="Rebuild baseline-owned tables from a saved run")
+    mode.add_argument("--finish-only", type=Path, metavar="RUN_DIR", help="Finish calibration and tables from saved seed predictions; no GPU")
     mode.add_argument("--smoke", action="store_true", help="Tiny synthetic graph training test; no downloads or real results")
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--seeds", type=int, default=10)
@@ -103,6 +104,14 @@ def main():
         from .test_adapter import graph_smoke
         graph_smoke(args.device)
         return
+    previous = None
+    if args.finish_only:
+        saved_dir = safe_output(args.finish_only)
+        previous = json.loads((saved_dir / "manifest.json").read_text())
+        for key in ("seeds", "epochs", "batch_size", "neighbors", "validation_fraction", "split_seed", "embedding_model", "tasks"):
+            setattr(args, key, previous["config"][key])
+        panels = previous["config"]["panels"]
+        args.panel = panels[0].split("|") if len(panels) == 1 else None
     bundle = load_bundle(args.project, args.tasks, args.panel, args.validation_fraction, args.split_seed)
     for g in bundle["groups"]:
         print(f"{g['task']} | {g['models']} | {g['counts']} | missing features={len(g['missing_feature_ids'])}")
@@ -113,8 +122,19 @@ def main():
     contain_caches()
     manifest = manifest_for(bundle, args)
     identity = digest(manifest)
-    run_dir = safe_output(args.report_only or (args.output_root / identity[:16]))
-    if args.report_only:
+    run_dir = safe_output(args.finish_only or args.report_only or (args.output_root / identity[:16]))
+    if args.finish_only:
+        # Code may change to repair postprocessing, but data/config cannot.
+        for key in ("config", "sources", "splits", "groups"):
+            if previous[key] != manifest[key]:
+                raise ValueError(f"Saved run {key} differs from current inputs; refusing recovery")
+        from .training import finish_saved
+        finish_saved(bundle, args, run_dir)
+        (run_dir / "postprocessing.json").write_text(json.dumps(dict(
+            training_identity=previous["identity"], code=manifest["code"], runtime=runtime_info(),
+            mode="finish_saved_predictions_no_training"), indent=2))
+        print("Recovered saved seed predictions; no training or model inference was run.")
+    elif args.report_only:
         previous = json.loads((run_dir / "manifest.json").read_text())
         if previous["identity"] != identity:
             raise ValueError("Report request differs from saved manifest; use the original run arguments")

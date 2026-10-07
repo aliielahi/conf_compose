@@ -123,3 +123,13 @@ IDs jointly across overlapping groups while keeping saved fits fixed.
 `plots/run.py` regenerates all PNG/PDF figures, including per-dataset, per-estimator
 heatmaps showing all 15 groups against all methods. Figures label judge reuse as
 approximate. Main tables stay free of coverage superscripts and significance stars.
+
+## Standard deviation in delta tables
+
+Delta tables show `mean ± SD` of the individual model-group deltas, using sample
+standard deviation (ddof=1). This describes variation across the evaluated groups,
+not uncertainty in the mean, a standard error, or a confidence interval. Each group
+contributes its own method-minus-reference delta before either statistic is computed.
+Overall tables use all 15 available groups; size tables use only that size category.
+SD is omitted when fewer than two group values are available. Absolute-value tables
+are unchanged. LaTeX uses smaller text for SD and includes a note defining it.

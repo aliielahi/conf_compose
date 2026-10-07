@@ -11,6 +11,8 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,29 @@ import numpy as np
 from .data import (ROOT, DEFAULT_PROJECT, fitting_id, id_digest, internal_splits,
                    majority, select_vote, pool_source, portable_source, file_hash, project_api, read_records, safe_output)
 from .features import answer_projection, pearson_matrix, query_matrices
+
+
+class FakeBeta:
+    def __init__(self, **kwargs):
+        pass
+
+    def fit(self, p, y):
+        return self
+
+    def predict(self, p):
+        return np.asarray(p).ravel()
+
+
+class ClosurePlatt:
+    def __init__(self, **kwargs):
+        pass
+
+    def train_calibration(self, p, y):
+        # Reproduce the real package's unpickleable local-function state.
+        self.calibrator = lambda values: 0.5 * np.asarray(values) + 0.25
+
+    def calibrate(self, p):
+        return self.calibrator(p)
 
 
 class AdapterTests(unittest.TestCase):
@@ -182,6 +207,35 @@ class AdapterTests(unittest.TestCase):
             path.write_text("".join(json.dumps(r) + "\n" for r in predictions))
             with self.assertRaisesRegex(ValueError, "changed fixed vote"):
                 make_reports(bundle, path, tmp / "tables")
+
+    def test_closure_calibration_and_prediction_only_recovery(self):
+        from .training import finish_saved
+        modules = {"betacal": SimpleNamespace(BetaCalibration=FakeBeta),
+                   "calibration": SimpleNamespace(PlattBinnerCalibrator=ClosurePlatt)}
+        validation = [dict(task="csqa", models="a|b", id=str(i), target="A", correct=i % 2,
+                           split="validation") for i in range(60)]
+        evaluation = [dict(task="csqa", models="a|b", id="test" + str(i), target="B", correct=i,
+                           split="evaluation") for i in range(2)]
+        bundle = dict(rows=validation + evaluation, splits={"csqa": {}})
+        args = SimpleNamespace(seeds=1, split_seed=0)
+        with tempfile.TemporaryDirectory(dir=ROOT / "voting_adapter", prefix="test-") as tmp, patch.dict("sys.modules", modules):
+            tmp = Path(tmp)
+            ledger = tmp / "features.jsonl"
+            ledger.write_text("".join(json.dumps(r) + "\n" for r in bundle["rows"]))
+            np.savez(tmp / "seed_0_predictions.npz", validation=np.linspace(0.1, 0.9, 60),
+                     evaluation=np.array([0.3, 0.7]))
+            original = (tmp / "seed_0_predictions.npz").read_bytes()
+            path = finish_saved(bundle, args, tmp)
+            predictions = [json.loads(line) for line in path.read_text().splitlines()]
+            np.testing.assert_allclose([r["betasb"] for r in predictions], [0.35, 0.65])
+            self.assertFalse((tmp / "calibrators.pkl").exists())
+            self.assertEqual(original, (tmp / "seed_0_predictions.npz").read_bytes())
+            with np.load(tmp / "calibration_inputs.npz", allow_pickle=False) as saved:
+                self.assertEqual(saved["validation_ids"].shape, (60,))
+                np.testing.assert_allclose(saved["calibrated_probabilities"], [0.35, 0.65])
+            ledger.write_text("".join(json.dumps(r) + "\n" for r in bundle["rows"][::-1]))
+            with self.assertRaisesRegex(ValueError, "order/targets differ"):
+                finish_saved(bundle, args, tmp)
 
     @unittest.skipUnless(importlib.util.find_spec("torch") and importlib.util.find_spec("torch_geometric"),
                          "PyTorch/PyG not available; run --smoke in the GPU environment")

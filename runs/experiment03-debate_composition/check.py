@@ -1,4 +1,4 @@
-"""Inspect saved debate cells: accuracy before and after, answer resolution, flips, truncation and position bias."""
+"""Inspect saved debate cells: completeness and signal coverage, then accuracy, answer resolution and position bias."""
 
 import argparse
 import json
@@ -6,9 +6,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from conf_compose.data import get_task
-from conf_compose.debate import DEBATE_STORE, DebateSettings, load_round
+from conf_compose.debate import DEBATE_STORE, DebateSettings, load_round, shared_ids
+from conf_compose.debate.store import read_rows
 
 SOURCES = ("explicit", "peer_reference", "kept_previous", "inferred", "none")
+SAMPLES = "consistency_t0.7"
 
 
 def parse_args():
@@ -41,8 +43,48 @@ def majority(task, answers):
     return counts.most_common(1)[0][0] if counts else None
 
 
+def completeness(args):
+    """Every file present, every row there, and every signal and candidate score filled in."""
+    print(f"{'cell':<58}{'rows':>6}{'files':>7}{'cons':>7}{'seq':>7}{'debias':>7}{'5 smp':>7}"
+          f"{'scored':>8}{'direct':>8}{'pool':>6}  status")
+    problems = 0
+    for settings, directory in saved_cells(args):
+        rounds = [r for r in rounds_written(directory) if r > 0]
+        last = max(rounds, default=0)
+        expected = len(shared_ids({m: load_round(settings, m, 0) for m in settings.group}, settings.limit))
+        paths = [settings.round_path(m, r, args.out_dir) for m in settings.group for r in rounds] + \
+                [settings.scores_path(m, last, args.out_dir) for m in settings.group]
+        present = [path for path in paths if path.exists()]
+        turns = [row for path in present if path.parent.name.startswith("round_") for row in read_rows(path)]
+        scores = [row for path in present if path.parent.name.startswith("candidates") for row in read_rows(path)]
+        answered = [t for t in turns if t["prediction"] is not None]
+        live = [t for t in turns if not t.get("error")]
+
+        def share(rows, test):
+            return sum(map(test, rows)) / len(rows) if rows else 0.0
+
+        cells = {
+            "cons": share(answered, lambda t: t["confidence"].get(SAMPLES) is not None),
+            "seq": share(live, lambda t: t["confidence"].get("seq_response") is not None),
+            "debias": share(live, lambda t: t["confidence"].get("seq_response_debiased") is not None),
+            "samples": share(live, lambda t: len((t.get("sampled_answers") or {}).get(SAMPLES, [])) == 5),
+            "direct": share(scores, lambda s: all(c.get("direct") for c in s["candidate_scores"]["candidates"])),
+        }
+        wanted_scores = len(settings.group) * (last + 1) * expected - sum(1 for t in turns if t.get("error"))
+        rows_ok = len(turns) == len(settings.group) * len(rounds) * expected and len(scores) == wanted_scores
+        healthy = len(present) == len(paths) and rows_ok and min(cells.values()) >= 0.99
+        problems += not healthy
+        pool = sum(len(s["candidate_scores"]["candidates"]) for s in scores) / max(len(scores), 1)
+        print(f"{directory.name[:57]:<58}{expected:>6}{len(present):>4}/{len(paths):<2}{cells['cons']:>7.3f}"
+              f"{cells['seq']:>7.3f}{cells['debias']:>7.3f}{cells['samples']:>7.3f}{len(scores):>8}"
+              f"{cells['direct']:>8.3f}{pool:>6.1f}  {'ok' if healthy else 'CHECK'}")
+    print(f"\n{problems} cell(s) need a look" if problems else "\nall cells complete")
+
+
 def main():
     args = parse_args()
+    completeness(args)
+    print()
     totals = defaultdict(Counter)
     print(f"{'cell':<58}{'r':>2}{'n':>6}{'acc0':>7}{'acc':>7}{'vote0':>7}{'vote':>7}{'chg':>6}"
           f"{'w>r':>5}{'r>w':>5}{'trunc':>6}{'ovf':>5}  answer source")
