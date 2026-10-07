@@ -6,6 +6,7 @@ import pickle
 import random
 import sys
 import time
+from collections import Counter
 
 import numpy as np
 
@@ -31,6 +32,17 @@ def make_graph(row, matrix, answers):
     lp = torch.tensor((np.clip(row["mean_logprobs"], -10, 0) + 5) / 5, dtype=torch.float32)
     data.x_T[:, 0] = lp
     data.x_0[:, 0] = lp
+    # Upstream Counter breaks ties by insertion order. Mark the actual fixed
+    # paper target instead; otherwise the graph would describe another answer.
+    counts = Counter(row["answers"])
+    target = row.get("target", counts.most_common(1)[0][0])
+    if target not in counts or counts[target] != max(counts.values()):
+        raise ValueError("Fixed target is not a majority candidate")
+    ordered = sorted(counts, key=lambda answer: (-counts[answer], answer != target))
+    ranks = {answer: index for index, answer in enumerate(ordered)}
+    for x in (data.x_T, data.x_0):
+        x[:, 1] = torch.tensor([ranks[a] / max(len(counts) - 1, 1) for a in row["answers"]])
+        x[:, 5] = torch.tensor([float(a == target) for a in row["answers"]])
     return data
 
 
@@ -73,7 +85,7 @@ def prepare_features(bundle, run_dir, args):
             data = make_graph(row, w, projected)
             datasets[row["split"]].append(dict(row=row, data=data))
             f.write(json.dumps(dict(task=row["task"], models=row["models"], id=row["id"],
-                split=row["split"], target=row["target"], answers=row["answers"],
+                split=row["split"], target=row["target"], selection_reason=row.get("selection_reason"), answers=row["answers"],
                 mean_logprobs=row["mean_logprobs"], training_neighbors=neighbors, W=w.tolist())) + "\n")
     return datasets
 

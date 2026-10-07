@@ -65,13 +65,16 @@ def manifest_for(bundle, args):
     sources = dict(bundle["sources"])
     for rel in ("src/conf_compose/utils/metrics.py", "src/conf_compose/data/base.py", "src/conf_compose/data/numeric.py",
                 "src/conf_compose/data/boolean.py", "src/conf_compose/data/multiple_choice.py",
-                "paper_results/codes/voting_protocol/tables.py"):
+                "paper_results/codes/voting_protocol/tables.py",
+                "runs/experiment02-voting_composition/atomic.py",
+                "src/conf_compose/composition/methods.py", "src/conf_compose/composition/candidates.py"):
         sources[rel] = file_hash(bundle["project"] / rel)
     return dict(schema=1, config=config, code=code, sources=sources, splits=bundle["splits"],
         groups=bundle["groups"], adaptations=[
             "IID: identical independent panel in both towers; communication adjacency is zero",
             "Voter 0 only; no extra rollouts or consistency samples used as graph nodes",
-            "Task-aware answer equivalence and ordered majority ties match conf_compose",
+            "Task-aware equivalence and saved first/confidence/seeded voting rules match the paper manifest",
+            "Graph ranks and plurality indicators mark the selected fixed target, including confidence-broken ties",
             "Internal validation is question-grouped within the existing outer fitting set",
             "W uses nearest training questions only, excludes self, one saved voter per model",
             "Answer PCA is training-only, zero-padded to 16 for small answer vocabularies",

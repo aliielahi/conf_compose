@@ -8,6 +8,8 @@ import numpy as np
 
 from .data import load_module, metric_module, safe_output
 
+METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
+
 LABELS = {"best_solo": "Best solo", "mean": "Arithmetic mean", "logodds_sum": "Log-odds sum",
           "logodds_mean": "Log-odds mean", "shared_rho": "Shared rho", "shared_scale": "Shared scale",
           "kahn": "Kahn", "blp": "BLP", "logistic_pool": "Logistic pool", "blp_equal": "BLP equal",
@@ -41,10 +43,11 @@ def make_reports(bundle, prediction_path, output):
     for r in original:
         for key in ("n_models", "n_matched"):
             r[key] = int(r[key])
-        for key in ("coverage", "accuracy", "ece", "reference_ece", "delta_ece", "reference_ece_accuracy",
-                    "auarc", "reference_auarc", "delta_auarc", "reference_auarc_accuracy"):
-            if r[key] != "":
-                r[key] = float(r[key])
+        numeric = ["coverage"] + [key for metric in METRICS
+                   for key in (metric, "reference_" + metric, "delta_" + metric, "reference_" + metric + "_accuracy")]
+        for key in numeric:
+            if key in r:
+                r[key] = float(r[key]) if r[key] != "" else None
     appended, metrics_rows = [], []
     for cell in cells:
         task, models, estimator = cell["task"], cell["models"], cell["estimator"]
@@ -55,22 +58,35 @@ def make_reports(bundle, prediction_path, output):
             p = np.round(np.asarray([r[field] for r in rows]), 12)
             if not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
                 raise ValueError("Invalid predicted confidence")
-            score = {key: getattr(methods, key)(p, y) for key in ("ece", "auarc", "auroc", "brier", "nll")}
+            score = {key: getattr(methods, key)(p, y) for key in METRICS if key != "accuracy"}
             accuracy = float(y.mean())
             if abs(accuracy - cell["vote_accuracy"]) > 1e-12:
                 raise ValueError("CAGE changed vote accuracy")
+            score["accuracy"] = accuracy
+            score = {key: float(value) if np.isfinite(value) else None for key, value in score.items()}
             row = dict(sample)
-            row.update(method=name, accuracy=accuracy, ece=score["ece"], auarc=score["auarc"],
-                       delta_ece=score["ece"] - sample["reference_ece"],
-                       delta_auarc=score["auarc"] - sample["reference_auarc"])
+            row["method"] = name
+            for metric, value in score.items():
+                if metric in row:
+                    row[metric] = value
+                delta = "delta_" + metric
+                if delta in row:
+                    reference = sample.get("reference_" + metric)
+                    row[delta] = value - reference if value is not None and reference is not None else None
+            if "judge_approximate" in row:
+                row["judge_approximate"] = False
+                row["judge_target_mismatches"] = 0
             appended.append(row)
             metrics_rows.append(dict(task=task, models=models, estimator=estimator, method=name,
-                n=len(y), coverage=cell["coverage"], accuracy=accuracy, **score))
+                n=len(y), coverage=cell["coverage"], **score))
     tables = load_module(bundle["project"] / "paper_results/codes/voting_protocol/tables.py", "voting_original_tables")
     tables.write_csv(output / "atomic.csv", original + appended)
     tables.write_csv(output / "cagecal_metrics.csv", metrics_rows)
     (output / "audit.json").write_text(json.dumps(cells, indent=2))
     labels = {r["method"]: LABELS.get(r["method"], r["method"]) for r in original + appended}
+    for row in original:
+        if row["method"].startswith("judge:") and str(row.get("judge_approximate", "")).lower() in ("true", "1"):
+            labels[row["method"]] = LABELS.get(row["method"], row["method"]) + " (approx.)"
     tables.write_tables(output, original + appended, cells, sorted({c["estimator"] for c in cells}),
                         labels, sorted({c["task"] for c in cells}))
     return metrics_rows

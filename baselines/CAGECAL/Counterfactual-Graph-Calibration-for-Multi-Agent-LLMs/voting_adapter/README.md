@@ -10,8 +10,9 @@ CAGE-Cal repository.
 
 Copy this `voting_adapter/` directory into the same CAGE-Cal repository on the
 GPU, alongside the existing `scripts/` and `cage_cal/` directories. The parent
-project needs its saved inferences, the `learned_panels_v1` CSVs and the current
-`paper_results/results/voting_protocol/{audit.json,atomic.csv}`. Keep their
+project needs its saved inferences, the pool CSVs referenced by the paper manifest (currently
+`learned_panels_confidence_tie_v2`) and the current
+`paper_results/results/voting_protocol/{manifest.json,audit.json,atomic.csv}`. Keep their
 relative directory layout. No Git commands are required by this adapter.
 
 ```bash
@@ -61,8 +62,11 @@ project's paper-table audit; this adapter deliberately does not invent splits.
 ## What is comparable, and what is adapted
 
 - **Same answers:** the saved voter-0 answer from each model; task equivalence
-  and first-model tie-breaking match the existing majority vote. The five
-  consistency samples are not extra CAGE graph nodes or extra voting agents.
+  and the saved tie-breaking rule match the existing majority vote. Both legacy
+  first-proposal ties and consistency-confidence ties with seeded fallback are
+  supported. Each reconstructed evaluation target is checked against the audit
+  when recorded there. The five consistency samples resolve ties under that rule;
+  they are not extra CAGE graph nodes or extra voting agents.
 - **Same evaluation:** source SHA-256 hashes and fit/evaluation/matched-ID hashes
   are verified. Every exported row uses exactly the questions in its original
   paper-table cell. Missing graph inputs may exclude examples outside that mask;
@@ -74,7 +78,8 @@ project's paper-table audit; this adapter deliberately does not invent splits.
   label-to-option mappings are checked across models before constructing a vote.
 - **IID topology:** both towers receive the same independent panel and the same
   W; communication adjacency is zero. Pairwise dependency edges and hyperedges
-  still exist. All agents have the voter role. This is a voting adaptation, not
+  still exist. Ranks and plurality indicators refer to the actual selected
+  target, including confidence-broken ties. All agents have the voter role. This is a voting adaptation, not
   a reproduction of the paper's full interacting-topology experiment.
 - **Supervision:** a single GNN is trained jointly across the requested tasks
   and panels. The existing outer fit/evaluation split is preserved. Within the
@@ -102,7 +107,8 @@ project's paper-table audit; this adapter deliberately does not invent splits.
 - **Cons/seq tables:** CAGE produces one confidence per fixed vote, independently
   of those estimator families. That same prediction appears in both table sets,
   evaluated on each set's original matching mask; it is not retrained separately
-  or fed the pooled consistency/sequence scores.
+  or fed the pooled consistency/sequence scores. Consistency may be used only
+  by the saved voting rule to choose the fixed target in a tie.
 
 ## Outputs and resuming
 

@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from .data import (ROOT, DEFAULT_PROJECT, fitting_id, id_digest, internal_splits,
-                   majority, project_api, read_records, safe_output)
+                   majority, select_vote, pool_source, portable_source, file_hash, project_api, read_records, safe_output)
 from .features import answer_projection, pearson_matrix, query_matrices
 
 
@@ -37,6 +37,47 @@ class AdapterTests(unittest.TestCase):
         task = self.get_task("csqa")
         self.assertEqual(majority(task, [None, "B", "A"])[0], "B")
         self.assertEqual(majority(task, [None, ""])[0], None)
+
+    def test_confidence_tie_break_and_strict_majority(self):
+        task = self.get_task("csqa")
+        members = [dict(prediction="A", samples=["A"] + ["B"] * 4),
+                   dict(prediction="B", samples=["B"] * 5),
+                   dict(prediction="C", samples=["C"] * 3 + [None] * 2)]
+        result = select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")
+        self.assertEqual((result[0], result[2]), ("B", "confidence"))
+        self.assertEqual(select_vote(task, members, ["a", "b", "c"], "q")[0], "A")
+        # The five original samples resolve ties only; they never overturn 2:1.
+        members[2]["prediction"] = "A"
+        self.assertEqual(select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")[0], "A")
+
+    def test_seeded_ties_are_order_independent_and_ignore_gold(self):
+        task = self.get_task("csqa")
+        members = [dict(prediction=a, samples=[a] * 5) for a in ("A", "B", "C")]
+        target, _, reason = select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")
+        self.assertEqual(reason, "equal_confidence_seeded")
+        reversed_target, _, _ = select_vote(task, members[::-1], ["c", "b", "a"], "q", tie_break="confidence")
+        self.assertEqual(target, reversed_target)
+        for member in members:
+            member["gold"] = "wrong label"
+        self.assertEqual(target, select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")[0])
+        members[0]["samples"] = [None] * 5
+        self.assertEqual(select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")[2],
+                         "missing_consistency_seeded")
+
+    def test_pool_manifest_relocation_and_hash_validation(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "voting_adapter", prefix="test-") as tmp:
+            project = Path(tmp)
+            pool = project / "results/voting_atomic/new_rule/cons.csv"
+            pool.parent.mkdir(parents=True)
+            pool.write_text("a,b\n1,2\n")
+            saved = "/old/mac/conf_compose/results/voting_atomic/new_rule/cons.csv"
+            manifest = {"pool_inputs": {saved: file_hash(pool)}}
+            self.assertEqual(pool_source(project, manifest, "cons")[0], pool)
+            pool.write_text("modified")
+            with self.assertRaisesRegex(ValueError, "differs from the paper manifest"):
+                pool_source(project, manifest, "cons")
+            with self.assertRaises(ValueError):
+                portable_source(project, "../outside.csv")
 
     def test_split_groups_by_question_not_panel(self):
         ids = {str(i) for i in range(100)}
@@ -104,6 +145,10 @@ class AdapterTests(unittest.TestCase):
                 coverage=2/3, reference_mode="fit_metric", method="mean", accuracy=0.5,
                 ece=0.2, reference_ece=0.3, delta_ece=-0.1, reference_ece_model="a", reference_ece_accuracy=0.5,
                 auarc=0.6, reference_auarc=0.5, delta_auarc=0.1, reference_auarc_model="a", reference_auarc_accuracy=0.5)
+            for metric in ("accuracy", "auroc", "brier", "nll"):
+                base.setdefault(metric, 0.25)
+                base.update({"reference_" + metric: 0.2, "delta_" + metric: 0.05,
+                             "reference_" + metric + "_model": "a", "reference_" + metric + "_accuracy": 0.5})
             source = tmp / "original.csv"
             with source.open("w") as f:
                 writer = csv.DictWriter(f, fieldnames=list(base)); writer.writeheader()
@@ -127,6 +172,12 @@ class AdapterTests(unittest.TestCase):
             self.assertAlmostEqual(report[0]["auarc"], 0.75)
             self.assertEqual(report[0]["accuracy"], 0.5)
             self.assertTrue((tmp / "tables/cons/size_2_absolute.tex").exists())
+            with (tmp / "tables/atomic.csv").open() as handle:
+                cage = next(r for r in csv.DictReader(handle) if r["method"] == "cagecal_iid")
+            self.assertAlmostEqual(float(cage["auroc"]), 1.0)
+            self.assertAlmostEqual(float(cage["delta_auroc"]), 0.8)
+            self.assertAlmostEqual(float(cage["brier"]), 0.01)
+            self.assertAlmostEqual(float(cage["delta_accuracy"]), 0.3)
             predictions[0]["target"] = "B"
             path.write_text("".join(json.dumps(r) + "\n" for r in predictions))
             with self.assertRaisesRegex(ValueError, "changed fixed vote"):
@@ -147,13 +198,16 @@ def graph_smoke(device="cpu"):
     for n in (2, 3, 5):
         row = dict(model_ids=[f"model{i}" for i in range(n)], task="synthetic",
                    answers=["A" if i % 2 else "B" for i in range(n)], mean_logprobs=[0.] + [-1.] * (n-1),
-                   correct=int(n % 2 == 0))
+                   correct=int(n % 2 == 0), target="A" if n == 2 else "B")
         features = {"A": np.ones(16, dtype=np.float32), "B": np.zeros(16, dtype=np.float32)}
         data = make_graph(row, np.eye(n, dtype=np.float32), features)
         assert data.x_T.shape == (n, 23)
         assert data.x_T[0, 0].item() == 1.0
         assert torch.equal(data.x_T, data.x_0)
         assert (data.edge_attr_T[:, 0] == 0).all()
+        if n == 2:  # Fixed answer A wins the tie despite B being proposed first.
+            torch.testing.assert_close(data.x_T[:, 5], torch.tensor([0., 1.]))
+            torch.testing.assert_close(data.x_T[:, 1], torch.tensor([1., 0.]))
         examples.append(dict(row=row, data=data))
     batch, bench, y = collate(examples, ["synthetic"], device)
     model = upstream().HyperHybridGNN(23, hid=8, heads=2, n_bench=1, dropout=0.0).to(device)

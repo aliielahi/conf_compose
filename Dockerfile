@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
         torch "transformers>=4.56" accelerate vllm \
-        numpy tqdm datasets math-verify python-dotenv pytest \
+        numpy scipy tqdm datasets math-verify python-dotenv pytest \
         matplotlib pandas
 
 # Catch a future wheel/toolkit mismatch during the build, before model startup.
