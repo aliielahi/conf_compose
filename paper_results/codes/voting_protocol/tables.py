@@ -58,6 +58,8 @@ def render_table(values, methods, tasks, title, delta, metrics=METRICS):
              "Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.",
              "All present methods and solo models use the same scored questions within each group and estimator.",
              "Judge rows marked approximate reuse old scores, including changed targets; rerun before publication.", ""]
+    if any(method.startswith("cagecal_") for method in methods):
+        notes.insert(-1, "CAGE-CAL uses the IID voting adaptation and ensemble scores across training seeds; Dataset-specific BetaSB identity fallbacks are recorded in manifest.json.")
     spread = delta and any(len(value) == 4 for value in values.values())
     if spread:
         notes.insert(-1, "Mean ± sample standard deviation of group-level deltas (ddof=1); descriptive variation, not a standard error or confidence interval. SD omitted for fewer than two groups.")
@@ -78,6 +80,8 @@ def render_table(values, methods, tasks, title, delta, metrics=METRICS):
     latex.extend([r"\end{tabular}", ""])
     if any("approx." in label for label in methods.values()):
         latex.insert(0, "% Approximate judge rows reuse scores elicited for old targets; regenerate before publication.")
+    if any(method.startswith("cagecal_") for method in methods):
+        latex.insert(0, "% CAGE-CAL: IID adaptation; seed-ensemble predictions. See manifest.json for dataset-specific BetaSB identity fallbacks.")
     latex.insert(0, "% Units: x100 except NLL (nats). Deltas are calculated within groups before averaging.")
     return text, "\n".join(latex)
 

@@ -133,3 +133,31 @@ contributes its own method-minus-reference delta before either statistic is comp
 Overall tables use all 15 available groups; size tables use only that size category.
 SD is omitted when fewer than two group values are available. Absolute-value tables
 are unchanged. LaTeX uses smaller text for SD and includes a note defining it.
+
+## CAGE-CAL voting baseline
+
+The report runner includes the completed IID voting adaptation by default, using
+`results/voting_adapter/5f0d2df353f60fe6` beneath the CAGECAL baseline directory.
+The row uses the saved seed-ensemble prediction followed by BetaSB, with the saved
+identity fallback on GPQA and TruthfulQA. It is the same estimator in both panels,
+evaluated on each panel's existing question mask. SD is across model-group deltas,
+not across training seeds. This is an IID adaptation, not an unchanged reproduction
+of every protocol in the CAGE-CAL paper.
+
+To refresh all existing tables without replaying inference records or refitting:
+
+```bash
+python paper_results/codes/voting_protocol/cagecal.py
+```
+
+This checks targets, fitting/evaluation IDs, matched masks, vote accuracy, and all
+six metrics against the saved CAGE-CAL export before adding rows. Existing rows and
+references are preserved. Repeated runs replace the CAGE-CAL rows, never duplicate
+them. The report manifest records input hashes and calibration fallbacks.
+
+For the full runner, `--cagecal-dir PATH` selects another completed run,
+`--cagecal-score raw` uses the uncalibrated score, and `--no-cagecal` omits the row.
+The refresh command accepts `--cagecal-dir PATH` and `--score raw` too. A different
+question mask or selection rule requires compatible CAGE-CAL outputs; it fails
+instead of silently substituting questions. Back up existing reports before
+switching variants. The default variant is fixed across datasets.

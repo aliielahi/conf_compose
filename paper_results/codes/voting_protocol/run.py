@@ -10,6 +10,7 @@ from data import ABLATIONS, METHODS, SourceStore, digest, index_judges, load_csv
 from significance import dataset_sign_tests
 from tables import write_csv, write_significance_tables, write_tables
 from prepare import prepare_pools
+from cagecal import DEFAULT_RUN, append_results
 
 
 def parse_args():
@@ -28,6 +29,9 @@ def parse_args():
     parser.add_argument("--judges", nargs="+", default=["g3-27i", "l32-3bi"])
     parser.add_argument("--reference", choices=("fit_metric", "fit_accuracy", "eval_accuracy", "metric_best"), default="fit_accuracy")
     parser.add_argument("--ablations", action="store_true")
+    parser.add_argument("--cagecal-dir", type=Path, default=DEFAULT_RUN)
+    parser.add_argument("--cagecal-score", choices=("raw", "betasb"), default="betasb")
+    parser.add_argument("--no-cagecal", action="store_true")
     parser.add_argument("--significance", action="store_true", help="exploratory dataset-block sign tests with joint Holm correction")
     return parser.parse_args()
 
@@ -67,6 +71,10 @@ def main():
         metadata.append(info)
         print(f"[{index}/{len(cells)}] {cell['task']} {cell['estimator']} {cell['models']} "
               f"matched={info['n_matched']}/{info['n_evaluation']}", flush=True)
+    cagecal = None
+    if not args.no_cagecal:
+        rows, cagecal_labels, cagecal = append_results(rows, metadata, args.cagecal_dir, args.cagecal_score)
+        labels.update(cagecal_labels)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(args.out_dir / "atomic.csv", rows)
     (args.out_dir / "audit.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n")
@@ -90,7 +98,7 @@ def main():
                 "judge_policy": args.judge_policy, "tie_break": args.tie_break, "tie_seed": args.tie_seed,
                 "question_mask": "intersection of valid solo, pooling and all present selected judge scores per cell",
                 "missing_judge_cells": "omitted; counts in separate coverage tables; no substitution",
-                "inference": False, "refitting": args.refit}
+                "inference": False, "refitting": args.refit, "cagecal": cagecal, "method_labels": labels}
     (args.out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Wrote {len(files)} tables plus atomic.csv, audit.json and manifest.json to {args.out_dir}")
     print("Negative delta ECE and positive delta AUARC are improvements. Panel counts are in separate coverage tables.")
