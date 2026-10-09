@@ -6,16 +6,18 @@ Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements
 ± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.
 Every method scores the same selected debate answer on the same questions.
 
-Method                       | CSQA ACCURACY | BOOLQ ACCURACY | GSM8K ACCURACY | TRUTHFULQA ACCURACY | GPQA ACCURACY
------------------------------+---------------+----------------+----------------+---------------------+--------------
-Single stream, same answer   | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Arithmetic mean              | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Log-odds sum                 | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Log-odds mean                | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Shared rho                   | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Shared scale                 | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Kahn (full covariance)       | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Weighted BLP                 | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Regularized logistic pooling | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Equal-weight BLP             | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
-Kahn (diagonal covariance)   | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Method                            | CSQA ACCURACY | BOOLQ ACCURACY | GSM8K ACCURACY | TRUTHFULQA ACCURACY | GPQA ACCURACY
+----------------------------------+---------------+----------------+----------------+---------------------+--------------
+Single stream, same answer        | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Arithmetic mean                   | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Log-odds sum                      | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Log-odds mean                     | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Shared rho                        | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Shared scale                      | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Kahn (full covariance)            | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Weighted BLP                      | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Regularized logistic pooling      | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Equal-weight BLP                  | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+Kahn (diagonal covariance)        | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+CAGE-CAL (paired debate)          | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        
+CAGE-CAL (paired debate + BetaSB) | 81.30         | 87.32          | 95.88          | 81.00               | 53.43        

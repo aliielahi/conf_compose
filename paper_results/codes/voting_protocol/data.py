@@ -133,7 +133,7 @@ def metric_values(scores, correct, ranks=None):
     return {key: value if math.isfinite(value) else None for key, value in values.items()}
 
 
-def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics=None):
+def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics=None, fitting_target_auarc=None):
     if mode == "fit_metric":
         if not fitting_metrics or any(value is None for value in fitting_metrics):
             raise ValueError("best fitting-metric reference requires scored fitting questions for every member")
@@ -153,8 +153,13 @@ def reference_indices(mode, fitting_accuracy, solo_metrics, solo_accuracy, fitti
                     choose = min if metric in LOWER_IS_BETTER else max
                     indices[metric] = choose(candidates, key=lambda index: solo_metrics[index][metric])
         return indices
-    accuracy = fitting_accuracy if mode == "fit_accuracy" else solo_accuracy
-    selected = max(range(len(accuracy)), key=lambda index: accuracy[index])
+    if mode == "fit_auarc":
+        if fitting_target_auarc is None or any(value is None for value in fitting_target_auarc):
+            raise ValueError("fitting answer-matched AUARC is unavailable for a panel member")
+        selected = max(range(len(fitting_target_auarc)), key=lambda index: fitting_target_auarc[index])
+    else:
+        accuracy = fitting_accuracy if mode == "fit_accuracy" else solo_accuracy
+        selected = max(range(len(accuracy)), key=lambda index: accuracy[index])
     return dict.fromkeys(METRICS, selected)
 
 
@@ -216,14 +221,22 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
                         for model in group]
     fitting_scores = [[] for _ in group]
     fitting_labels = [[] for _ in group]
+    fitting_target_scores = [[] for _ in group]
+    fitting_target_labels = []
     for item in fitting:
-        _, own, _ = atomic.confidence_scores(task, item, args, fitting_records)
+        target, own, shared_scores = atomic.confidence_scores(task, item, args, fitting_records)
+        if target is not None and all(valid_probability(score) for score in shared_scores):
+            fitting_target_labels.append(float(task.is_correct(target, Example(item.example_id, item.question, item.gold))))
+            for index, score in enumerate(shared_scores):
+                fitting_target_scores[index].append(score)
         if all(valid_probability(score) for score in own):
             for index, model in enumerate(group):
                 fitting_scores[index].append(own[index])
                 fitting_labels[index].append(float(fitting_records[model][item.example_id]["correct"]))
     fitting_metrics = [metric_values(scores, labels) if scores else None
                        for scores, labels in zip(fitting_scores, fitting_labels)]
+    fitting_target_auarc = [metric_values(scores, fitting_target_labels)["auarc"] if scores else None
+                            for scores in fitting_target_scores]
     judge_rows, missing, judge_sources = {}, {}, {}
     panel = tuple(model.split("/")[-1] for model in group)
     for judge in judges:
@@ -250,6 +263,7 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
     rankings = {method: [] for method in values}
     solo = [[] for _ in group]
     solo_labels = [[] for _ in group]
+    shared = [[] for _ in group]
     labels, retained_ids, scored_ids = [], [], []
     judge_mismatches = {method: [] for method in judge_rows}
     old_targets, new_targets, selection_reasons = {}, {}, {}
@@ -298,6 +312,7 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
         for index, model in enumerate(group):
             solo[index].append(own[index])
             solo_labels[index].append(float(records[model][item.example_id]["correct"]))
+            shared[index].append(scores[index])
         for method in active_methods:
             values[method].append(predictions[method].score)
             rankings[method].append(rank_value(predictions[method]))
@@ -326,7 +341,8 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
                 "judge_sources": judge_sources, "missing": missing, "source_code_hash": row["code_hash"],
                 "replay_minus_csv": replay_differences, "numerical_precision": 12,
                 "fitting_accuracy": dict(zip(group, fitting_accuracy)),
-                "fitting_solo_metrics": dict(zip(group, fitting_metrics)), "reference_mode": reference,
+                "fitting_solo_metrics": dict(zip(group, fitting_metrics)),
+                "fitting_target_auarc": dict(zip(group, fitting_target_auarc)), "reference_mode": reference,
                 "tie_break": args.tie_break, "tie_seed": args.tie_seed, "judge_policy": judge_policy,
                 "old_targets": old_targets, "selected_targets": new_targets, "selection_reasons": selection_reasons,
                 "n_changed_targets": sum(not task.equivalent(old_targets[key], value) for key, value in new_targets.items()),
@@ -337,8 +353,9 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
         return [], metadata
     solo_metrics = [metric_values(scores, correct) for scores, correct in zip(solo, solo_labels)]
     solo_accuracy = [float(np.mean(correct)) for correct in solo_labels]
-    indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics)
+    indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics, fitting_target_auarc)
     baseline = {metric: solo_metrics[indices[metric]][metric] for metric in METRICS}
+    matched_auarc = metric_values(shared[indices["accuracy"]], labels)["auarc"]
     fit_values = {method: [] for method in values}
     fit_labels = {method: [] for method in values}
     for item in fitting:
@@ -396,5 +413,9 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
             reference_metric = metric[2:] if metric.startswith("t_") else metric
             entry[f"reference_{metric}_model"] = group[indices[reference_metric]]
             entry[f"reference_{metric}_accuracy"] = solo_accuracy[indices[reference_metric]]
+        entry["answer_matched_auarc"] = matched_auarc if method == "best_solo" else scores["auarc"]
+        entry["reference_answer_matched_auarc"] = matched_auarc
+        entry["delta_answer_matched_auarc"] = (entry["answer_matched_auarc"] - matched_auarc
+                                                 if entry["answer_matched_auarc"] is not None and matched_auarc is not None else None)
         output.append(entry)
     return output, metadata

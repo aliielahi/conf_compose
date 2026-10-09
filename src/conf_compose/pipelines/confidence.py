@@ -105,10 +105,10 @@ def estimate_confidence(llm, task, targets: Sequence[Target], config: Optional[C
 
 
 def _check_stage(stage: str, values: Sequence[Optional[float]], targets: Sequence[Target],
-                 hint: str = "") -> None:
-    """An estimator that returns nothing for every answerable target means the backend failed."""
+                 hint: str = "", minimum: int = 20) -> None:
+    """Nothing for every answerable target means the backend failed; a handful can all miss by chance."""
     answerable = [i for i, target in enumerate(targets) if target.answer is not None]
-    if answerable and all(values[i] is None for i in answerable):
+    if len(answerable) >= minimum and all(values[i] is None for i in answerable):
         raise RuntimeError(f"{stage}: no value for any of {len(answerable)} answerable targets"
                            + (f"; {hint}" if hint else "; check the backend"))
 

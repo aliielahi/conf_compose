@@ -6,16 +6,18 @@ Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements
 ± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.
 Every method scores the same selected debate answer on the same questions.
 
-Method                       | CSQA ECE | CSQA AUARC | BOOLQ ECE | BOOLQ AUARC | GSM8K ECE | GSM8K AUARC | TRUTHFULQA ECE | TRUTHFULQA AUARC | GPQA ECE | GPQA AUARC
------------------------------+----------+------------+-----------+-------------+-----------+-------------+----------------+------------------+----------+-----------
-Single stream, same answer   | 8.36     | 83.51      | 3.41      | 89.26       | 5.38      | 96.26       | 9.62           | 83.50            | 37.25    | 49.48     
-Arithmetic mean              | 5.98     | 86.56      | 2.72      | 90.55       | 7.17      | 97.26       | 7.19           | 87.45            | 32.75    | 52.18     
-Log-odds sum                 | 14.85    | 86.56      | 9.65      | 90.55       | 3.10      | 97.27       | 16.63          | 87.47            | 42.94    | 52.19     
-Log-odds mean                | 6.74     | 86.56      | 2.65      | 90.55       | 6.95      | 97.27       | 8.18           | 87.47            | 35.01    | 52.19     
-Shared rho                   | 14.15    | 86.56      | 9.29      | 90.55       | 2.44      | 97.27       | 15.48          | 87.47            | 40.78    | 52.19     
-Shared scale                 | 4.58     | 86.56      | 2.51      | 90.55       | 1.82      | 97.27       | 8.04           | 87.47            | 13.75    | 52.19     
-Kahn (full covariance)       | 5.83     | 86.63      | 3.23      | 90.63       | 4.60      | 97.29       | 6.59           | 87.55            | 16.97    | 51.33     
-Weighted BLP                 | 4.40     | 86.62      | 1.68      | 90.63       | 1.77      | 97.29       | 7.11           | 87.52            | 16.17    | 50.30     
-Regularized logistic pooling | 4.21     | 86.62      | 1.97      | 90.63       | 2.08      | 97.28       | 7.59           | 87.56            | 15.01    | 51.19     
-Equal-weight BLP             | 4.31     | 86.56      | 1.96      | 90.55       | 1.52      | 97.26       | 6.98           | 87.45            | 14.10    | 52.18     
-Kahn (diagonal covariance)   | 6.45     | 86.62      | 3.59      | 90.63       | 4.88      | 97.29       | 6.13           | 87.55            | 14.94    | 52.09     
+Method                            | CSQA ECE | CSQA AUARC | BOOLQ ECE | BOOLQ AUARC | GSM8K ECE | GSM8K AUARC | TRUTHFULQA ECE | TRUTHFULQA AUARC | GPQA ECE | GPQA AUARC
+----------------------------------+----------+------------+-----------+-------------+-----------+-------------+----------------+------------------+----------+-----------
+Single stream, same answer        | 8.36     | 83.51      | 3.41      | 89.26       | 5.38      | 96.26       | 9.62           | 83.50            | 37.25    | 49.48     
+Arithmetic mean                   | 5.98     | 86.56      | 2.72      | 90.55       | 7.17      | 97.26       | 7.19           | 87.45            | 32.75    | 52.18     
+Log-odds sum                      | 14.85    | 86.56      | 9.65      | 90.55       | 3.10      | 97.27       | 16.63          | 87.47            | 42.94    | 52.19     
+Log-odds mean                     | 6.74     | 86.56      | 2.65      | 90.55       | 6.95      | 97.27       | 8.18           | 87.47            | 35.01    | 52.19     
+Shared rho                        | 14.15    | 86.56      | 9.29      | 90.55       | 2.44      | 97.27       | 15.48          | 87.47            | 40.78    | 52.19     
+Shared scale                      | 4.58     | 86.56      | 2.51      | 90.55       | 1.82      | 97.27       | 8.04           | 87.47            | 13.75    | 52.19     
+Kahn (full covariance)            | 5.83     | 86.63      | 3.23      | 90.63       | 4.60      | 97.29       | 6.59           | 87.55            | 16.97    | 51.33     
+Weighted BLP                      | 4.40     | 86.62      | 1.68      | 90.63       | 1.77      | 97.29       | 7.11           | 87.52            | 16.17    | 50.30     
+Regularized logistic pooling      | 4.21     | 86.62      | 1.97      | 90.63       | 2.08      | 97.28       | 7.59           | 87.56            | 15.01    | 51.19     
+Equal-weight BLP                  | 4.31     | 86.56      | 1.96      | 90.55       | 1.52      | 97.26       | 6.98           | 87.45            | 14.10    | 52.18     
+Kahn (diagonal covariance)        | 6.45     | 86.62      | 3.59      | 90.63       | 4.88      | 97.29       | 6.13           | 87.55            | 14.94    | 52.09     
+CAGE-CAL (paired debate)          | 3.78     | 86.82      | 2.97      | 93.69       | 4.86      | 98.18       | 3.52           | 84.69            | 23.52    | 50.43     
+CAGE-CAL (paired debate + BetaSB) | 9.80     | 86.82      | 1.92      | 93.69       | 2.13      | 98.18       | 3.52           | 84.69            | 23.52    | 50.43     

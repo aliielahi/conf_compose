@@ -164,3 +164,26 @@ The refresh command accepts `--cagecal-dir PATH` and `--score raw` too. A differ
 question mask or selection rule requires compatible CAGE-CAL outputs; it fails
 instead of silently substituting questions. Back up existing reports before
 switching variants. The default variant is fixed across datasets.
+
+## Answer-matched comparison and CAGE-CAL
+
+`atomic.csv` retains the solo model's own-answer `auarc`. It also reports
+`answer_matched_auarc`: the same selected group answer is scored by the one
+fitting-selected reference model. `delta_answer_matched_auarc` compares each
+combination with that fixed-answer reference on identical questions. The
+`*_full_*` tables include both AUARC columns, while the main paper table shows
+the answer-matched delta beside the original absolute AUARC.
+
+The default CAGE-CAL source includes raw IID scores and BetaSB scores. The
+raw row has t-Brier and t-ECE from one temperature fitted on the separate
+validation predictions. The BetaSB row has no extra output-temperature fit.
+
+To compare a reference selected by fitting-split answer-matched AUARC, use
+a separate report directory (this changes the baseline, not pooling fits):
+
+```bash
+python paper_results/codes/voting_protocol/run.py --ablations --significance \
+  --reference fit_auarc --out-dir paper_results/results/voting_protocol_fit_auarc
+```
+
+All ties choose the first model in the panel's stored order.

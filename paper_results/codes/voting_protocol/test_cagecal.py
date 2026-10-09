@@ -28,9 +28,13 @@ class CagecalTest(unittest.TestCase):
         self.save('calibration.json', {})
         self.save('paper_tables/audit.json', [self.cell])
         self.save_predictions()
+        (self.directory / 'validation_predictions.jsonl').write_text(json.dumps(dict(task='csqa', models='a|b', id='v1', target='A', correct=1, raw=0.7)) + '\n')
         values = {metric: getattr(metrics, metric)([0.8, 0.2], [1, 0]) for metric in RAW_METRICS if metric != 'accuracy'}
         write_csv(self.directory / 'paper_tables/cagecal_metrics.csv',
-                  [dict(task='csqa', models='a|b', estimator='cons', method=method, accuracy=0.5, **values)
+                  [dict(task='csqa', models='a|b', estimator='cons', method=method, accuracy=0.5, **values,
+                        t_brier=values['brier'] if method == 'cagecal_iid' else None,
+                        t_ece=values['ece'] if method == 'cagecal_iid' else None,
+                        output_temperature=1.0 if method == 'cagecal_iid' else None)
                    for method in ('cagecal_iid', 'cagecal_iid_betasb')])
 
     def save(self, filename, value):
@@ -41,11 +45,13 @@ class CagecalTest(unittest.TestCase):
 
     def test_deltas_and_idempotence(self):
         rows, labels, provenance = append_results(self.rows, [self.cell], self.directory)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         self.assertEqual(rows[-1]['accuracy'], 0.5)
         self.assertAlmostEqual(rows[-1]['delta_brier'], 0.04 - 0.25)
         self.assertIsNone(rows[-1]['t_brier'])
-        self.assertEqual(provenance['n_cells'], 1)
+        self.assertEqual(provenance['n_cells'], 2)
+        self.assertAlmostEqual(rows[1]['t_brier'], 0.04)
+        self.assertIsNone(rows[2]['t_brier'])
         again, _, _ = append_results(rows, [self.cell], self.directory)
         self.assertEqual(rows, again)
         raw, _, _ = append_results(again, [self.cell], self.directory, 'raw')

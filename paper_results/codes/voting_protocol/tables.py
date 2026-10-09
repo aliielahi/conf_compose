@@ -3,9 +3,9 @@ from pathlib import Path
 from statistics import mean, stdev
 
 METRICS = ("ece", "auarc")
-FULL_METRICS = ("accuracy", "ece", "t_ece", "auarc", "auroc", "brier", "t_brier", "nll")
+FULL_METRICS = ("accuracy", "ece", "t_ece", "auarc", "answer_matched_auarc", "auroc", "brier", "t_brier", "nll")
 METRIC_NAMES = {"accuracy": "Acc", "ece": "ECE", "t_ece": "t-ECE", "auarc": "AUARC",
-                "auroc": "AUROC", "brier": "Brier", "t_brier": "t-Brier", "nll": "NLL"}
+                "answer_matched_auarc": "AUARC (same answer)", "auroc": "AUROC", "brier": "Brier", "t_brier": "t-Brier", "nll": "NLL"}
 LOWER_IS_BETTER = {"ece", "t_ece", "brier", "t_brier", "nll"}
 DATASET_NAMES = {"csqa": "CSQA", "boolq": "BoolQ", "gsm8k": "GSM8K", "truthfulqa": "TruthfulQA", "gpqa": "GPQA"}
 
@@ -166,7 +166,7 @@ def paper_highlights(values, names, tasks, fields):
             candidates = sorted(
                 ((name, values[name, task, field][0]) for name in names
                  if values[name, task, field][0] is not None),
-                key=lambda item: item[1], reverse=field == "auarc",
+                key=lambda item: item[1], reverse=field in ("auarc", "answer_matched_auarc", "delta_answer_matched_auarc"),
             )
             rank = 0
             previous = None
@@ -188,18 +188,18 @@ def write_paper_table(path, rows, cells, estimator, methods, tasks):
         ("Judge-based confidence", tuple(name for name in methods if name.startswith("judge:"))),
         ("Learned per-model weights", ("kahn", "kahn_diagonal", "blp", "logistic_pool")),
     )
-    fields = ("brier", "t_brier", "auarc")
+    fields = ("t_ece", "t_brier", "auarc", "delta_answer_matched_auarc")
     values = aggregate(rows, cells, estimator, None, methods, tasks, False, fields, spread=True)
     names = [name for _, section in sections for name in section if name in methods]
     highlights = paper_highlights(values, names, tasks, fields)
     width = 1 + len(tasks) * len(fields)
     lines = [r"\begin{table*}[t]", r"\centering",
-             rf"\caption{{Voting confidence quality with {escape(estimator)} scores. Absolute metrics are averaged across 15 model groups per dataset; entries are mean $\pm$ sample SD. Lower Brier and t-Brier, and higher AUARC, are better.}}",
+             rf"\caption{{Voting confidence quality with {escape(estimator)} scores. Absolute metrics are averaged across 15 model groups per dataset; entries are mean $\pm$ sample SD. Lower t-ECE and t-Brier, and higher AUARC, are better.}}",
              rf"\label{{tab:voting-{escape(estimator)}-absolute}}",
              r"\setlength{\tabcolsep}{2.6pt}", r"\resizebox{\textwidth}{!}{%",
              r"\begin{tabular}{@{}l" + "r" * (width - 1) + r"@{}}", r"\toprule",
-             " & " + " & ".join(rf"\multicolumn{{3}}{{c}}{{{escape(DATASET_NAMES.get(task, task))}}}" for task in tasks) + r" \\",
-             "Method & " + " & ".join(("Brier $\\downarrow$", "t-Brier $\\downarrow$", "AUARC $\\uparrow$") * len(tasks)) + r" \\",
+             " & " + " & ".join(rf"\multicolumn{{4}}{{c}}{{{escape(DATASET_NAMES.get(task, task))}}}" for task in tasks) + r" \\",
+             "Method & " + " & ".join(("t-ECE $\\downarrow$", "t-Brier $\\downarrow$", "AUARC $\\uparrow$", "$\\Delta$AUARC (same answer) $\\uparrow$") * len(tasks)) + r" \\",
              r"\midrule"]
     for section, names in sections:
         selected = [name for name in names if name in methods]
@@ -221,6 +221,6 @@ def write_paper_table(path, rows, cells, estimator, methods, tasks):
     lines[-1] = r"\bottomrule"
     lines += [r"\end{tabular}%", "}",
               r"\vspace{2pt}",
-              r"\parbox{\textwidth}{\footnotesize t-Brier uses one output temperature fitted by NLL on the fitting split and held fixed on evaluation. AUARC uses the original scores. CAGE-CAL t-Brier is unavailable because its saved predictions contain only evaluation questions.}",
+              r"\parbox{\textwidth}{\footnotesize t-ECE and t-Brier use one output temperature fitted by NLL on fitting data. AUARC uses original scores; $\Delta$AUARC compares with the same selected answer scored by one fitting-accuracy-selected model. CAGE-CAL BetaSB has no additional temperature fit.}",
               r"\end{table*}"]
     path.write_text("\n".join(lines) + "\n")

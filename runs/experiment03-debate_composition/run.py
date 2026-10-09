@@ -5,6 +5,7 @@ Every cell, round and model is a file written once complete, so rerunning the sa
 """
 
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -179,8 +180,15 @@ def main():
     args = parse_args()
     args.store, args.out_dir = args.store.resolve(), args.out_dir.resolve()
     if args.child:
-        run_child(args)
-        return
+        # vLLM's background threads can keep a failed child alive forever; exit hard so the parent sees it.
+        try:
+            run_child(args)
+        except BaseException:
+            traceback.print_exc()
+            sys.stdout.flush()
+            os._exit(1)
+        sys.stdout.flush()
+        os._exit(0)
     all_cells = cells(args)
     plan = steps(args)
     sizes = {task: questions(args, task) for task in args.tasks}

@@ -2328,7 +2328,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -4666,7 +4666,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -7001,7 +7001,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-3196": {
@@ -9307,7 +9307,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g3-12i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -11976,7 +11976,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -14278,7 +14278,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -16868,7 +16868,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -19482,7 +19482,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -22066,7 +22066,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1026": {
@@ -24680,7 +24680,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -27302,7 +27302,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -29988,7 +29988,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-2579": {
@@ -32280,7 +32280,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -34997,7 +34997,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1061": {
@@ -37671,7 +37671,7 @@
       "boolq-validation-996"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "boolq-validation-1010": {
@@ -38812,7 +38812,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1729c737ff92cf558efecde2c6cafc5e": {
@@ -39767,7 +39767,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1729c737ff92cf558efecde2c6cafc5e": {
@@ -40691,7 +40691,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1d8d9e3504c8c58a3b923ddc155c19b0": {
@@ -41664,7 +41664,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g3-12i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "4fa0d61ec82eb1e238d8938d5f43f392": {
@@ -42584,7 +42584,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "46351b3a6beb694c5f623583a3b1473d": {
@@ -43466,7 +43466,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "3d79c10ddf26a5ed7dc0bb168fb0b3ed": {
@@ -44404,7 +44404,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1729c737ff92cf558efecde2c6cafc5e": {
@@ -45384,7 +45384,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1d8d9e3504c8c58a3b923ddc155c19b0": {
@@ -46380,7 +46380,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "29c194d032a266a7160bff6f546a4d9d": {
@@ -47346,7 +47346,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1d8d9e3504c8c58a3b923ddc155c19b0": {
@@ -48342,7 +48342,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1729c737ff92cf558efecde2c6cafc5e": {
@@ -49321,7 +49321,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "118a9093a30695622363455e4d911866": {
@@ -50266,7 +50266,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "3d79c10ddf26a5ed7dc0bb168fb0b3ed": {
@@ -51198,7 +51198,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "1bc986f8aea88d6927d8a45367855a94": {
@@ -52192,7 +52192,7 @@
       "fff554fffa1a0adc64b8d1e21d55534b"
     ],
     "reference_model": "g3-12i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "11d7db1d8e1cff2f40d4184f15cf7ae7": {
@@ -52348,7 +52348,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-111": {
@@ -52524,7 +52524,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-111": {
@@ -52740,7 +52740,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-136": {
@@ -52929,7 +52929,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-159": {
@@ -53140,7 +53140,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -53256,7 +53256,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-159": {
@@ -53405,7 +53405,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-136": {
@@ -53631,7 +53631,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-136": {
@@ -53857,7 +53857,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-136": {
@@ -54083,7 +54083,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-111": {
@@ -54334,7 +54334,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-111": {
@@ -54596,7 +54596,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-136": {
@@ -54769,7 +54769,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-159": {
@@ -54937,7 +54937,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-131": {
@@ -55172,7 +55172,7 @@
       "gpqa-train-99"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gpqa-train-131": {
@@ -56178,7 +56178,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "g3-12i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -57107,7 +57107,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "g3-12i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gsm8k-test-1097": {
@@ -58046,7 +58046,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "phi4mii",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -58976,7 +58976,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -59906,7 +59906,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -60836,7 +60836,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -61766,7 +61766,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -62696,7 +62696,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -63625,7 +63625,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gsm8k-test-1097": {
@@ -64564,7 +64564,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -65494,7 +65494,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -66423,7 +66423,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gsm8k-test-1097": {
@@ -67362,7 +67362,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -68291,7 +68291,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "gsm8k-test-1097": {
@@ -69230,7 +69230,7 @@
       "gsm8k-test-999"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -69668,7 +69668,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-577": {
@@ -70121,7 +70121,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-577": {
@@ -70588,7 +70588,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-115": {
@@ -71076,7 +71076,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-229": {
@@ -71525,7 +71525,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {},
     "selection_reasons": {
@@ -71961,7 +71961,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "q3-4bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-181": {
@@ -72428,7 +72428,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -72910,7 +72910,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -73400,7 +73400,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -73892,7 +73892,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -74373,7 +74373,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -74874,7 +74874,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -75346,7 +75346,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-118": {
@@ -75798,7 +75798,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "g2-9i",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-125": {
@@ -76278,7 +76278,7 @@
       "truthfulqa-validation-98"
     ],
     "reference_model": "q3-8bi",
-    "reference_mode": "initial_fit_accuracy",
+    "reference_mode": "fit_accuracy",
     "confidence": "consistency",
     "excluded": {
       "truthfulqa-validation-229": {

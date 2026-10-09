@@ -12,12 +12,13 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
 from conf_compose.utils import metrics
+from conf_compose.utils.calibration import fit_temperature, temperature_scale
 from significance import dataset_sign_tests
 from tables import FULL_METRICS, write_csv, write_significance_tables, write_tables
 
-RAW_METRICS = tuple(metric for metric in FULL_METRICS if not metric.startswith("t_"))
+RAW_METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
 
-DEFAULT_RUN = ROOT / "baselines/CAGECAL/Counterfactual-Graph-Calibration-for-Multi-Agent-LLMs/results/voting_adapter/5f0d2df353f60fe6"
+DEFAULT_RUN = ROOT / "baselines/results/voting_adapter/a1fc8f63af8e71c5"
 LABELS = {"cagecal_iid": "CAGE-CAL (IID)", "cagecal_iid_betasb": "CAGE-CAL (IID + BetaSB)"}
 
 
@@ -33,8 +34,8 @@ def cell_key(row):
     return row["task"], row["models"], row["estimator"]
 
 
-def append_results(rows, cells, directory=DEFAULT_RUN, score="betasb"):
-    if score not in ("raw", "betasb"):
+def append_results(rows, cells, directory=DEFAULT_RUN, score="both"):
+    if score not in ("raw", "betasb", "both"):
         raise ValueError(f"unknown CAGE-CAL score: {score}")
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -42,74 +43,96 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="betasb"):
     saved_cells = {cell_key(cell): cell for cell in json.loads((directory / "paper_tables/audit.json").read_text())}
     with (directory / "paper_tables/cagecal_metrics.csv").open() as handle:
         saved_metrics = {(cell_key(row), row["method"]): row for row in csv.DictReader(handle)}
-    predictions = {}
-    with (directory / "predictions.jsonl").open() as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            prediction = json.loads(line)
-            key = prediction["task"], prediction["models"], prediction["id"]
-            if key in predictions:
-                raise ValueError(f"duplicate CAGE-CAL prediction: {key}")
-            predictions[key] = prediction
+
+    def predictions_at(path):
+        result = {}
+        with path.open() as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                prediction = json.loads(line)
+                key = prediction["task"], prediction["models"], prediction["id"]
+                if key in result:
+                    raise ValueError(f"duplicate CAGE-CAL prediction: {key}")
+                result[key] = prediction
+        return result
+
+    predictions = predictions_at(directory / "predictions.jsonl")
+    validation = predictions_at(directory / "validation_predictions.jsonl")
     original = [row for row in rows if not row["method"].startswith("cagecal_")]
     references = {cell_key(row): row for row in original if row["method"] == "best_solo"}
-    method = "cagecal_iid_betasb" if score == "betasb" else "cagecal_iid"
+    methods = [("cagecal_iid", "raw"), ("cagecal_iid_betasb", "betasb")]
+    if score != "both":
+        methods = [methods[0] if score == "raw" else methods[1]]
     appended = []
     for cell in cells:
         key = cell_key(cell)
         saved = saved_cells[key]
         for field in ("matched_ids", "fit_ids_hash", "eval_ids_hash", "tie_break", "tie_seed"):
             if cell[field] != saved[field]:
-                raise ValueError(f"CAGE-CAL {field} mismatch: {key}; regenerate baseline for this evaluation")
+                raise ValueError(f"CAGE-CAL {field} mismatch: {key}")
         split = manifest["splits"][cell["task"]]
-        train, validation, evaluation = (set(split[name]) for name in ("train", "validation", "evaluation"))
-        if train & validation or (train | validation) & evaluation:
+        train, val_ids, evaluation = (set(split[name]) for name in ("train", "validation", "evaluation"))
+        if train & val_ids or (train | val_ids) & evaluation:
             raise ValueError(f"CAGE-CAL split overlap: {key}")
-        if ids_digest(train | validation) != cell["fit_ids_hash"] or ids_digest(evaluation) != cell["eval_ids_hash"]:
+        if ids_digest(train | val_ids) != cell["fit_ids_hash"] or ids_digest(evaluation) != cell["eval_ids_hash"]:
             raise ValueError(f"CAGE-CAL fitting/evaluation split mismatch: {key}")
-        selected = []
-        for question in cell["matched_ids"]:
-            prediction = predictions[(cell["task"], cell["models"], question)]
-            if prediction["target"] != cell["selected_targets"][question]:
-                raise ValueError(f"CAGE-CAL target mismatch: {key}, {question}")
-            if prediction["correct"] not in (0, 1):
-                raise ValueError(f"invalid CAGE-CAL correctness label: {key}, {question}")
-            selected.append(prediction)
-        probabilities = np.round(np.asarray([row[score] for row in selected], dtype=float), 12)
-        if not np.isfinite(probabilities).all() or ((probabilities < 0) | (probabilities > 1)).any():
-            raise ValueError(f"invalid CAGE-CAL confidence: {key}")
-        correct = np.asarray([row["correct"] for row in selected])
-        values = {metric: float(getattr(metrics, metric)(probabilities, correct))
-                  for metric in RAW_METRICS if metric != "accuracy"}
-        values["accuracy"] = float(correct.mean())
-        if not math.isclose(values["accuracy"], cell["vote_accuracy"], abs_tol=1e-12):
-            raise ValueError(f"CAGE-CAL voting accuracy mismatch: {key}")
-        exported = saved_metrics[key, method]
-        for metric, value in values.items():
-            expected = float(exported[metric]) if exported[metric] else float("nan")
-            if not (math.isnan(value) and math.isnan(expected)) and not math.isclose(value, expected, abs_tol=1e-12):
-                raise ValueError(f"CAGE-CAL saved {metric} does not match predictions: {key}")
-        row = dict(references[key], method=method, judge_approximate=False, judge_target_mismatches=0)
-        row["output_temperature"] = None
-        for metric in ("t_brier", "t_ece"):
-            row[metric] = None
-            row[f"delta_{metric}"] = None
-        for metric, value in values.items():
-            value = value if math.isfinite(value) else None
-            reference = row.get(f"reference_{metric}")
-            row[metric] = value
-            row[f"delta_{metric}"] = value - reference if value is not None and reference is not None else None
-        appended.append(row)
-    files = ("manifest.json", "predictions.jsonl", "calibration.json", "paper_tables/audit.json", "paper_tables/cagecal_metrics.csv")
+        selected = [predictions[(cell["task"], cell["models"], question)] for question in cell["matched_ids"]]
+        for question, prediction in zip(cell["matched_ids"], selected):
+            if prediction["target"] != cell["selected_targets"][question] or prediction["correct"] not in (0, 1):
+                raise ValueError(f"CAGE-CAL target mismatch or invalid label: {key}/{question}")
+        val = [prediction for (task, models, question), prediction in validation.items()
+               if (task, models) == key[:2]]
+        if not val or not set(prediction["id"] for prediction in val) <= val_ids:
+            raise ValueError(f"CAGE-CAL validation IDs mismatch: {key}")
+        for method, field in methods:
+            probabilities = np.round(np.asarray([item[field] for item in selected], dtype=float), 12)
+            if not np.isfinite(probabilities).all() or ((probabilities < 0) | (probabilities > 1)).any():
+                raise ValueError(f"invalid CAGE-CAL confidence: {key}")
+            correct = np.asarray([item["correct"] for item in selected])
+            values = {metric: float(getattr(metrics, metric)(probabilities, correct))
+                      for metric in RAW_METRICS if metric != "accuracy"}
+            values["accuracy"] = float(correct.mean())
+            if not math.isclose(values["accuracy"], cell["vote_accuracy"], abs_tol=1e-12):
+                raise ValueError(f"CAGE-CAL voting accuracy mismatch: {key}")
+            exported = saved_metrics[key, method]
+            for metric, value in values.items():
+                expected = float(exported[metric]) if exported[metric] else float("nan")
+                if not (math.isnan(value) and math.isnan(expected)) and not math.isclose(value, expected, abs_tol=1e-12):
+                    raise ValueError(f"CAGE-CAL saved {metric} does not match predictions: {key}")
+            temperature = None
+            t_values = {"t_brier": None, "t_ece": None}
+            if field == "raw":
+                temperature = (fit_temperature([item["raw"] for item in val], [item["correct"] for item in val])
+                               if len({item["correct"] for item in val}) > 1 else 1.0)
+                if not math.isclose(temperature, float(exported["output_temperature"]), abs_tol=1e-5):
+                    raise ValueError(f"CAGE-CAL output temperature mismatch: {key}")
+                temperature = float(exported["output_temperature"])
+                calibrated = temperature_scale(probabilities, temperature)
+                t_values = {"t_brier": float(metrics.brier(calibrated, correct)),
+                            "t_ece": float(metrics.ece(calibrated, correct))}
+                for metric, value in t_values.items():
+                    if not math.isclose(value, float(exported[metric]), abs_tol=1e-12):
+                        raise ValueError(f"CAGE-CAL saved {metric} does not match validation fit: {key}")
+            row = dict(references[key], method=method, judge_approximate=False, judge_target_mismatches=0)
+            row["output_temperature"] = temperature
+            values.update(t_values)
+            values["answer_matched_auarc"] = values["auarc"]
+            for metric, value in values.items():
+                value = value if value is not None and math.isfinite(value) else None
+                reference = row.get(f"reference_{metric}")
+                row[metric] = value
+                row[f"delta_{metric}"] = value - reference if value is not None and reference is not None else None
+            appended.append(row)
+    files = ("manifest.json", "predictions.jsonl", "validation_predictions.jsonl", "calibration.json",
+             "paper_tables/audit.json", "paper_tables/cagecal_metrics.csv")
     provenance = {"directory": str(directory.resolve()), "run_identity": manifest["identity"], "score": score,
-                  "method": method, "seeds": manifest["config"]["seeds"], "n_cells": len(appended),
-                  "calibration": calibration, "sources": {name: digest(directory / name) for name in files},
-                  "prediction": "mean across training seeds, followed by BetaSB when available" if score == "betasb" else "mean across training seeds",
-                  "spread": "sample SD across model-group deltas, not training seeds",
+                  "methods": [name for name, _ in methods], "seeds": manifest["config"]["seeds"],
+                  "n_cells": len(appended), "calibration": calibration,
+                  "sources": {name: digest(directory / name) for name in files},
+                  "temperature_metrics": "raw CAGE score only; output temperature fitted on disjoint validation predictions",
                   "same_prediction_across_estimators": "evaluated on each estimator's existing matched question mask"}
-    provenance["temperature_metrics"] = "unavailable: saved predictions contain evaluation questions only"
-    return original + appended, {method: LABELS[method]}, provenance
+    return original + appended, {method: LABELS[method] for method, _ in methods}, provenance
 
 
 def read_rows(path):
@@ -131,7 +154,7 @@ def main():
     parser = argparse.ArgumentParser(description="Refresh saved voting tables with audited CAGE-CAL predictions; no inference or refitting")
     parser.add_argument("--report-dir", type=Path, default=ROOT / "paper_results/results/voting_protocol")
     parser.add_argument("--cagecal-dir", type=Path, default=DEFAULT_RUN)
-    parser.add_argument("--score", choices=("raw", "betasb"), default="betasb")
+    parser.add_argument("--score", choices=("raw", "betasb", "both"), default="both")
     args = parser.parse_args()
     directory = args.report_dir
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -161,7 +184,7 @@ def main():
     manifest["report_code"] = {str(path): digest(path) for path in sorted(Path(__file__).parent.glob("*.py"))}
     manifest.pop("table_render_source", None)
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"Added {provenance['n_cells']} CAGE-CAL cells; wrote {len(files)} tables to {directory}")
+    print(f"Added {provenance['n_cells']} CAGE-CAL rows; wrote {len(files)} tables to {directory}")
 
 
 if __name__ == "__main__":

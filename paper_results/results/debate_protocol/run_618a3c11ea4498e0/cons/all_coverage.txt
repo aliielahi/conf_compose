@@ -10,3 +10,5 @@ Weighted BLP | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
 Regularized logistic pooling | 15/15 | 14/15 | 15/15 | 15/15 | 15/15
 Equal-weight BLP | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
 Kahn (diagonal covariance) | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+CAGE-CAL (paired debate) | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+CAGE-CAL (paired debate + BetaSB) | 15/15 | 15/15 | 15/15 | 15/15 | 15/15

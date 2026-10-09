@@ -16,6 +16,8 @@ def test_reference_is_metric_specific_and_uses_only_fitting_scores():
     assert reference_indices("fit_metric", [0.7, 0.8], evaluation, [0.9, 0.95], fitting) == {"accuracy": 1, "ece": 1, "auarc": 0}
     assert reference_indices("metric_best", [0.7, 0.8], evaluation, [0.9, 0.95]) == {"accuracy": 1, "ece": 0, "auarc": 1}
     assert reference_indices("fit_accuracy", [0.9, 0.8], evaluation, [0.9, 0.95]) == dict.fromkeys(METRICS, 0)
+    assert reference_indices("fit_auarc", [0.9, 0.8], evaluation, [0.9, 0.95], fitting, [0.4, 0.7]) == dict.fromkeys(METRICS, 1)
+    assert reference_indices("fit_auarc", [0.9, 0.8], evaluation, [0.9, 0.95], fitting, [0.7, 0.7]) == dict.fromkeys(METRICS, 0)
 
 
 def test_average_is_over_panel_deltas_with_missing_judges_explicit():

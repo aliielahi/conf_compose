@@ -17,6 +17,7 @@ TASKS = ('csqa', 'boolq', 'gsm8k', 'truthfulqa', 'gpqa')
 SIZES = (2, 3, 4, 5, 6)
 RAW_FIELDS = ('accuracy', 'ece', 'auarc', 'auroc', 'brier', 'nll')
 FIELDS = (*RAW_FIELDS, 't_brier', 't_ece')
+REPORT_FIELDS = (*FIELDS, 'answer_matched_auarc')
 RULES = {
     'reference_stream_target': 'Single stream, same answer',
     'mean': 'Arithmetic mean',
@@ -30,9 +31,14 @@ RULES = {
     'blp_equal': 'Equal-weight BLP',
     'kahn_diagonal': 'Kahn (diagonal covariance)',
 }
+CAGE_RUN = ROOT / 'baselines/results/debate_adapter/71259088b2f0e984'
+CAGE_RULES = {'cagecal_debate': 'CAGE-CAL (paired debate)',
+              'cagecal_debate_betasb': 'CAGE-CAL (paired debate + BetaSB)'}
+REPORT_RULES = {**RULES, **CAGE_RULES}
 LOWER = {'ece', 't_ece', 'brier', 't_brier', 'nll'}
 NAMES = {'accuracy': 'Acc', 'ece': 'ECE', 't_ece': 't-ECE', 'auarc': 'AUARC', 'auroc': 'AUROC',
-         'brier': 'Brier', 't_brier': 't-Brier', 'nll': 'NLL'}
+         'brier': 'Brier', 't_brier': 't-Brier', 'nll': 'NLL',
+         'answer_matched_auarc': 'AUARC (same answer)'}
 
 
 def digest(path):
@@ -121,7 +127,7 @@ def temperature_metrics(records, audit, method):
             't_ece': metrics.ece(probabilities, labels)}, temperature, len(evaluation)
 
 
-def prepare(run):
+def prepare(run, reference_mode='fit_accuracy'):
     manifest = json.loads((run / 'manifest.json').read_text())
     if manifest['identity']['estimators'] != ['cons'] or manifest['skipped']:
         raise ValueError('report needs one completed consistency-only run without skipped cells')
@@ -154,9 +160,20 @@ def prepare(run):
         if not ({'best_solo'} | (RULES.keys() - {'reference_stream_target'})) <= present:
             raise ValueError(f'missing composition methods: {path}')
         source_reference = next(row for row in group if row['method'] == 'best_solo')
-        reference = reference_stream(audit, path / 'predictions.jsonl')
         with (path / 'predictions.jsonl').open() as handle:
             predictions = {record['id']: record for record in (json.loads(line) for line in handle)}
+        if reference_mode == 'fit_auarc':
+            fitting = audit['fit_scored_ids']
+            if not fitting:
+                raise ValueError(f'no fitting scores for AUARC reference: {path}')
+            labels = [float(predictions[question]['correct']) for question in fitting]
+            candidate_scores = [scores([predictions[question]['post_debate']['shared'][index] for question in fitting], labels)['auarc']
+                                for index in range(len(models.split('|')))]
+            if any(value is None for value in candidate_scores):
+                raise ValueError(f'undefined fitting AUARC reference: {path}')
+            audit['reference_model'] = models.split('|')[max(range(len(candidate_scores)), key=lambda index: candidate_scores[index])]
+        audit['reference_mode'] = reference_mode
+        reference = reference_stream(audit, path / 'predictions.jsonl')
         temperatures = {}
         for method in RULES:
             values, temperature, n_scored = temperature_metrics(predictions, audit, method)
@@ -191,8 +208,88 @@ def prepare(run):
                 parsed['reference_' + field] = valid(reference['accuracy_all']) if field == 'accuracy' else reference_value
                 parsed['delta_' + field] = (parsed[field] - parsed['reference_' + field]
                                             if parsed[field] is not None and parsed['reference_' + field] is not None else None)
+            parsed['answer_matched_auarc'] = parsed['auarc']
+            parsed['reference_answer_matched_auarc'] = parsed['reference_auarc']
+            parsed['delta_answer_matched_auarc'] = parsed['delta_auarc']
             rows.append(parsed)
     return rows, audits, manifest
+
+
+def append_cagecal(rows, audits, directory):
+    directory = Path(directory)
+    source_audits = json.loads((directory / 'paper_tables/audit.json').read_text())
+    source_cells = {(cell['task'], cell['models'], int(cell.get('round', 1))): cell for cell in source_audits}
+    with (directory / 'paper_tables/cagecal_metrics.csv').open(newline='') as handle:
+        source_metrics = {(row['task'], row['models'], row['method']): row for row in csv.DictReader(handle)}
+
+    def load(path):
+        found = {}
+        with path.open() as handle:
+            for line in handle:
+                item = json.loads(line)
+                identity = (item['task'], item['models'], item['id'])
+                if identity in found:
+                    raise ValueError(f'duplicate CAGE-CAL prediction: {identity}')
+                found[identity] = item
+        return found
+
+    predictions = load(directory / 'predictions.jsonl')
+    validation = load(directory / 'validation_predictions.jsonl')
+    references = {(row['task'], row['models'], row['round']): row for row in rows
+                  if row['method'] == 'reference_stream_target'}
+    if set(references) != set(source_cells):
+        raise ValueError('CAGE-CAL debate cells do not match composition cells')
+    for audit in audits:
+        identity = (audit['task'], audit['models'], audit['round'])
+        source = source_cells[identity]
+        if source['matched_ids'] != audit['matched_ids'] or source['n_matched'] != audit['n_matched']:
+            raise ValueError(f'CAGE-CAL debate question mask differs: {identity}')
+        selected = [predictions[(audit['task'], audit['models'], question)] for question in audit['matched_ids']]
+        labels = [float(item['correct']) for item in selected]
+        if abs(mean(labels) - source['vote_accuracy']) > 1e-12:
+            raise ValueError(f'CAGE-CAL debate labels differ: {identity}')
+        val = [item for (task, models, _), item in validation.items()
+               if (task, models) == identity[:2]]
+        if not val or set(item['id'] for item in val) & set(audit['matched_ids']):
+            raise ValueError(f'CAGE-CAL validation missing or overlapping: {identity}')
+        for method, field in (('cagecal_debate', 'raw'), ('cagecal_debate_betasb', 'betasb')):
+            export = source_metrics[audit['task'], audit['models'], method]
+            probabilities = [float(item[field]) for item in selected]
+            observed = scores(probabilities, labels)
+            for metric in RAW_FIELDS:
+                expected = valid(export[metric])
+                actual = observed[metric]
+                if metric == 'accuracy':
+                    continue
+                if actual is not None and expected is not None and abs(actual - expected) > 1e-9:
+                    raise ValueError(f'CAGE-CAL debate {metric} differs: {identity}/{method}')
+            temperature = None
+            calibrated = {'t_brier': None, 't_ece': None}
+            if method == 'cagecal_debate':
+                temperature = (fit_temperature([item['raw'] for item in val], [item['correct'] for item in val])
+                               if len({item['correct'] for item in val}) > 1 else 1.0)
+                if abs(temperature - float(export['output_temperature'])) > 1e-5:
+                    raise ValueError(f'CAGE-CAL debate temperature differs: {identity}')
+                temperature = float(export['output_temperature'])
+                scaled = temperature_scale(probabilities, temperature)
+                calibrated = {'t_brier': float(metrics.brier(scaled, labels)),
+                              't_ece': float(metrics.ece(scaled, labels))}
+                for metric, value in calibrated.items():
+                    if abs(value - float(export[metric])) > 1e-9:
+                        raise ValueError(f'CAGE-CAL debate {metric} differs: {identity}')
+            row = dict(references[identity], method=method, status='trained', output_temperature=temperature)
+            for metric, value in {**observed, **calibrated}.items():
+                if metric == 'accuracy':
+                    continue
+                baseline = row['reference_' + metric]
+                row[metric] = value
+                row['delta_' + metric] = value - baseline if value is not None and baseline is not None else None
+            row['answer_matched_auarc'] = row['auarc']
+            row['delta_answer_matched_auarc'] = row['delta_auarc']
+            rows.append(row)
+    return {'directory': str(directory.resolve()), 'cells': len(source_cells),
+            'validation_predictions_sha256': digest(directory / 'validation_predictions.jsonl'),
+            'evaluation_predictions_sha256': digest(directory / 'predictions.jsonl')}
 
 
 def summary(rows, audits, method, task, size, field, comparison=None):
@@ -225,7 +322,7 @@ def escape(value):
 
 
 def table(rows, audits, tasks, size, fields, comparison):
-    methods = list(RULES)
+    methods = list(REPORT_RULES)
     title = {None: 'Absolute results',
              'target': 'Delta from single stream on the same answer',
              'mean': 'Delta from arithmetic mean'}[comparison]
@@ -239,7 +336,7 @@ def table(rows, audits, tasks, size, fields, comparison):
              'Every method scores the same selected debate answer on the same questions.', '']
     columns = [(task, field) for task in tasks for field in fields]
     headers = ['Method'] + [f'{task.upper()} {field.upper()}' for task, field in columns]
-    grid = [[RULES[method]] + [display(*summary(rows, audits, method, task, size, field, comparison)[:2], field, comparison is not None)
+    grid = [[REPORT_RULES[method]] + [display(*summary(rows, audits, method, task, size, field, comparison)[:2], field, comparison is not None)
                                for task, field in columns] for method in methods]
     widths = [max(len(str(row[i])) for row in [headers, *grid]) for i in range(len(headers))]
     lines = [' | '.join(str(value).ljust(width) for value, width in zip(row, widths)) for row in [headers, *grid]]
@@ -260,14 +357,14 @@ def table(rows, audits, tasks, size, fields, comparison):
                 left, right = cell.split(' ± ')
                 cell = left + r' {\scriptsize $\pm$ ' + right + '}'
             cells.append(cell)
-        latex.append(escape(RULES[method]) + ' & ' + ' & '.join(cells) + r' \\')
+        latex.append(escape(REPORT_RULES[method]) + ' & ' + ' & '.join(cells) + r' \\')
     latex += [r'\bottomrule', r'\end{tabular}', '']
     return txt, '\n'.join(latex)
 
 
 def sign_test(rows, audits, tasks):
     tests = []
-    for method in RULES:
+    for method in REPORT_RULES:
         if method == 'reference_stream_target':
             continue
         for field in ('ece', 'auarc'):
@@ -301,7 +398,7 @@ def paper_highlights(rows, audits, sections, tasks, fields):
                 value = summary(rows, audits, name, task, None, field)[0]
                 if value is not None:
                     candidates.append((name, value))
-            candidates.sort(key=lambda item: item[1], reverse=field == 'auarc')
+            candidates.sort(key=lambda item: item[1], reverse=field in ('auarc', 'answer_matched_auarc', 'delta_answer_matched_auarc'))
             rank = 0
             previous = None
             for name, value in candidates:
@@ -320,9 +417,10 @@ def paper_table(rows, audits, tasks):
     sections = (
         ('Reference', ('reference_stream_target',)),
         ('No learned combination weights', ('mean', 'logodds_sum')),
+        ('External baseline', tuple(CAGE_RULES)),
         ('Learned per-model weights', ('kahn', 'kahn_diagonal', 'blp', 'logistic_pool')),
     )
-    fields = ('brier', 't_brier', 'auarc')
+    fields = ('t_ece', 't_brier', 'auarc', 'delta_answer_matched_auarc')
     highlights = paper_highlights(rows, audits, sections, tasks, fields)
     width = 1 + len(tasks) * len(fields)
     lines = [r'\begin{table*}[t]', r'\centering',
@@ -330,8 +428,8 @@ def paper_table(rows, audits, tasks):
              r'\label{tab:debate-consistency-absolute}',
              r'\setlength{\tabcolsep}{2.6pt}', r'\resizebox{\textwidth}{!}{%',
              r'\begin{tabular}{@{}l' + 'r' * (width - 1) + r'@{}}', r'\toprule',
-             ' & ' + ' & '.join(rf'\multicolumn{{3}}{{c}}{{{escape(task.upper())}}}' for task in tasks) + r' \\',
-             'Method & ' + ' & '.join(('Brier $\\downarrow$', 't-Brier $\\downarrow$', 'AUARC $\\uparrow$') * len(tasks)) + r' \\',
+             ' & ' + ' & '.join(rf'\multicolumn{{4}}{{c}}{{{escape(task.upper())}}}' for task in tasks) + r' \\',
+             'Method & ' + ' & '.join(('t-ECE $\\downarrow$', 't-Brier $\\downarrow$', 'AUARC $\\uparrow$', '$\\Delta$AUARC (same answer) $\\uparrow$') * len(tasks)) + r' \\',
              r'\midrule']
     for section, methods in sections:
         lines.append(rf'\multicolumn{{{width}}}{{l}}{{\textbf{{{section}}}}}\\')
@@ -345,17 +443,18 @@ def paper_table(rows, audits, tasks):
                     )
                     macro = highlights.get((method, task, field))
                     cells.append(rf'\{macro}{{{cell}}}' if macro else cell)
-            lines.append(escape(RULES[method]) + ' & ' + ' & '.join(cells) + r' \\')
+            lines.append(escape(REPORT_RULES[method]) + ' & ' + ' & '.join(cells) + r' \\')
         lines.append(r'\midrule')
     lines[-1] = r'\bottomrule'
     lines += [r'\end{tabular}%', '}', r'\vspace{2pt}',
-              r'\parbox{\textwidth}{\footnotesize t-Brier applies one output temperature fitted by NLL on the fitting split and held fixed on evaluation. AUARC uses the original ranking. Lower Brier and t-Brier, and higher AUARC, are better.}',
+              r'\parbox{\textwidth}{\footnotesize t-ECE and t-Brier use a validation-fitted output temperature on raw scores. AUARC uses original rankings; $\Delta$AUARC compares with one model scoring the same final answer. CAGE-CAL BetaSB has no additional temperature fit.}',
               r'\end{table*}']
     return '\n'.join(lines) + '\n'
 
 
 def run(args):
-    rows, audits, source = prepare(args.run)
+    rows, audits, source = prepare(args.run, args.reference)
+    cage_provenance = append_cagecal(rows, audits, args.cagecal_dir)
     tasks = [task for task in TASKS if task in {row['task'] for row in rows}]
     if len(tasks) != len({row['task'] for row in rows}):
         raise ValueError('unknown dataset in composition output')
@@ -366,17 +465,17 @@ def run(args):
     (output / 'audit.json').write_text(json.dumps(audits, indent=2) + '\n')
     for size in (None, *SIZES):
         prefix = 'all' if size is None else f'size_{size}'
-        for tag, fields in (('', ('ece', 'auarc')), ('_full', FIELDS), ('_accuracy', ('accuracy',))):
+        for tag, fields in (('', ('ece', 'auarc')), ('_full', REPORT_FIELDS), ('_accuracy', ('accuracy',))):
             for comparison, suffix in ((None, 'absolute'), ('target', 'delta'), ('mean', 'vs_mean')):
                 txt, tex = table(rows, audits, tasks, size, fields, comparison)
                 for extension, content in (('txt', txt), ('tex', tex)):
                     (output / f'{prefix}{tag}_{suffix}.{extension}').write_text(content)
         coverage = ['Method' + ''.join(f' | {task.upper()}' for task in tasks)]
-        for method, label in RULES.items():
+        for method, label in REPORT_RULES.items():
             coverage.append(label + ''.join(f' | {summary(rows, audits, method, task, size, "ece")[2]}/'
                                             f'{summary(rows, audits, method, task, size, "ece")[3]}' for task in tasks))
         (output / f'{prefix}_coverage.txt').write_text('\n'.join(coverage) + '\n')
-    if args.out.resolve() == (ROOT / 'paper_results/results/debate_protocol').resolve():
+    if args.out.resolve() == (ROOT / 'paper_results/results/debate_protocol').resolve() and args.reference == 'fit_accuracy':
         (ROOT / 'paper_results/z_paper_tables/debate_consistency.tex').write_text(paper_table(rows, audits, tasks))
     provenance = {'source_run': str(args.run.resolve()), 'source_run_id': source['run_id'],
                   'source_manifest_sha256': digest(args.run / 'manifest.json'),
@@ -384,7 +483,7 @@ def run(args):
                   'report_code_sha256': digest(Path(__file__)), 'tasks': tasks,
                   'groups_per_task': {task: sum(audit['task'] == task for audit in audits) for task in tasks},
                   'rounds': sorted({row['round'] for row in rows}), 'estimator': 'cons',
-                  'n_rows': len(rows),
+                  'n_rows': len(rows), 'reference': args.reference, 'cagecal': cage_provenance,
                   'significance': 'exploratory one-sided dataset-block sign tests with joint Holm correction',
                   'accuracy': 'all evaluation questions; confidence metrics use each group common matched subset'}
     provenance['temperature_calibration'] = 'one output temperature fitted by NLL on original fitting questions; AUARC unchanged'
@@ -396,4 +495,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Report saved post-debate consistency composition')
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--out', type=Path, default=ROOT / 'paper_results/results/debate_protocol')
+    parser.add_argument('--reference', choices=('fit_accuracy', 'fit_auarc'), default='fit_accuracy')
+    parser.add_argument('--cagecal-dir', type=Path, default=CAGE_RUN)
     run(parser.parse_args())

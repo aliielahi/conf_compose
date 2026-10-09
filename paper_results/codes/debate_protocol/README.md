@@ -15,3 +15,21 @@ The reference stream is the group member selected by fitting-split initial-answe
 The t metrics use one output temperature fitted by NLL on fitting questions. The temperature is applied only to evaluation probabilities; raw AUARC and AUROC are unchanged. The paper table shows absolute Brier, t-Brier and AUARC means across the groups.
 
 Only round-one consistency results are included. The old voting judge and CAGE-CAL scores are not post-debate baselines and are not imported. The sequence-probability report can be added after its candidate scoring is complete.
+
+
+The current reporter also joins the paired-debate CAGE-CAL adapter in
+`baselines/results/debate_adapter/71259088b2f0e984`. Its raw row has
+validation-fitted t-Brier and t-ECE; its BetaSB row has no second temperature.
+`atomic.csv` retains AUARC and adds `answer_matched_auarc` and the corresponding
+delta. In debate the reference already scores the final answer, so the two
+AUARC columns are numerically identical.
+
+To select the reference by fitting-split AUARC instead of fitting accuracy:
+
+```bash
+python paper_results/codes/debate_protocol/run.py \
+  --run results/debate_composition/run_618a3c11ea4498e0 \
+  --reference fit_auarc --out paper_results/results/debate_protocol_fit_auarc
+```
+
+Keep the alternative output separate from the primary report.

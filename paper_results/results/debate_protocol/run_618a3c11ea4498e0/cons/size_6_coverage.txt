@@ -10,3 +10,5 @@ Weighted BLP | 2/2 | 2/2 | 2/2 | 2/2 | 2/2
 Regularized logistic pooling | 2/2 | 2/2 | 2/2 | 2/2 | 2/2
 Equal-weight BLP | 2/2 | 2/2 | 2/2 | 2/2 | 2/2
 Kahn (diagonal covariance) | 2/2 | 2/2 | 2/2 | 2/2 | 2/2
+CAGE-CAL (paired debate) | 2/2 | 2/2 | 2/2 | 2/2 | 2/2
+CAGE-CAL (paired debate + BetaSB) | 2/2 | 2/2 | 2/2 | 2/2 | 2/2

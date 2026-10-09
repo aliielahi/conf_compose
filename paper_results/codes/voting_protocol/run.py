@@ -36,10 +36,12 @@ def preserve_verified_raw(rows, metadata, directory, pool_dir, estimators):
     with saved_path.open(newline="") as handle:
         saved = {(row["task"], row["estimator"], row["models"], row["method"]): row
                  for row in csv.DictReader(handle)}
-    if len(saved) != len(rows):
-        raise ValueError("saved method/group rows differ from replay")
+    if saved_manifest["arguments"].get("reference") != metadata[0]["reference_mode"]:
+        raise ValueError("saved report used a different reference; choose a fresh --out-dir")
     largest = 0.0
     for row in rows:
+        if row["method"].startswith("cagecal_"):
+            continue
         key = (*identity(row), row["method"])
         prior = saved.get(key)
         if prior is None:
@@ -74,10 +76,10 @@ def parse_args():
     parser.add_argument("--estimators", nargs="+", choices=("cons", "seq"), default=["cons", "seq"])
     parser.add_argument("--tasks", nargs="+", default=["csqa", "boolq", "gsm8k", "truthfulqa", "gpqa"])
     parser.add_argument("--judges", nargs="+", default=["g3-27i", "l32-3bi"])
-    parser.add_argument("--reference", choices=("fit_metric", "fit_accuracy", "eval_accuracy", "metric_best"), default="fit_accuracy")
+    parser.add_argument("--reference", choices=("fit_metric", "fit_accuracy", "fit_auarc", "eval_accuracy", "metric_best"), default="fit_accuracy")
     parser.add_argument("--ablations", action="store_true")
     parser.add_argument("--cagecal-dir", type=Path, default=DEFAULT_RUN)
-    parser.add_argument("--cagecal-score", choices=("raw", "betasb"), default="betasb")
+    parser.add_argument("--cagecal-score", choices=("raw", "betasb", "both"), default="both")
     parser.add_argument("--no-cagecal", action="store_true")
     parser.add_argument("--significance", action="store_true", help="exploratory dataset-block sign tests with joint Holm correction")
     return parser.parse_args()
