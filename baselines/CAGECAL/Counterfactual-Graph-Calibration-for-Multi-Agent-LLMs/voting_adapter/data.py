@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -132,7 +133,10 @@ def portable_source(project, saved):
         if "results" not in parts:
             raise ValueError(f"Cannot relocate paper input: {saved}")
         path = project.joinpath(*parts[parts.index("results"):])
-    path = path.resolve()
+    # Keep the logical project path: results may be symlinked to a mounted
+    # GPU data disk. Resolving that link would wrongly reject a valid input.
+    # Normalize traversal before checking containment; hashes still verify data.
+    path = Path(os.path.abspath(path))
     if project not in path.parents:
         raise ValueError(f"Paper input is outside the project: {saved}")
     return path

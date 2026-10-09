@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -23,13 +24,13 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
         if len(candidates) != 1:
             raise ValueError('Specify --debate-table: expected exactly one debate paper report')
         table_dir = candidates[0].parent
-    table_dir = Path(table_dir).resolve()
+    table_dir = Path(os.path.abspath(table_dir))
     report = json.loads((table_dir / 'manifest.json').read_text())
     run = portable_source(project, report['source_run'])
     provenance, cache = {}, {}
 
     def checked(path, expected=None):
-        path = Path(path).resolve()
+        path = Path(os.path.abspath(path))
         key = str(path.relative_to(project))
         actual = provenance.get(key)
         if actual is None:
@@ -54,7 +55,7 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
         return checked(path, artifacts[relative])
 
     def records(path):
-        path = Path(path).resolve()
+        path = Path(os.path.abspath(path))
         if path not in source_hashes:
             raise ValueError(f'Inference absent from composition manifest: {path}')
         checked(path, source_hashes[path])

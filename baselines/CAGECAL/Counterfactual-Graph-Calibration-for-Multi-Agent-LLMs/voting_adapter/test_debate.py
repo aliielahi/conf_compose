@@ -86,6 +86,29 @@ class DebateTests(unittest.TestCase):
         self.assertFalse(set(splits['evaluation']) & (set(splits['train']) | set(splits['validation'])))
         self.assertAlmostEqual(bundle['cells'][0]['vote_accuracy'], 1/3)
 
+    def test_symlinked_debate_store_keeps_hash_checks_and_logical_paths(self):
+        # GPU results can live on another mount, outside the project checkout.
+        store = self.project / 'results/debate_inferences'
+        with tempfile.TemporaryDirectory(dir=ROOT / 'voting_adapter', prefix='test-mount-') as tmp:
+            moved = Path(tmp) / 'debate_inferences'
+            store.rename(moved)
+            store.symlink_to(moved, target_is_directory=True)
+            # Simulate absolute Mac paths recorded before copying to the GPU.
+            manifest_path = self.run / 'manifest.json'
+            manifest = json.loads(manifest_path.read_text())
+            manifest['identity']['sources'] = {
+                '/old/mac/project/' + str(Path(k).relative_to(self.project)): v
+                for k, v in manifest['identity']['sources'].items()}
+            self.write(manifest_path, manifest)
+            report = json.loads((self.table / 'manifest.json').read_text())
+            report['source_manifest_sha256'] = file_hash(manifest_path)
+            self.write(self.table / 'manifest.json', report)
+            self.assertEqual(len(self.load()['rows']), 13)
+            with self.current[0].open('a') as f:
+                f.write('\n')
+            with self.assertRaisesRegex(ValueError, 'Source hash differs'):
+                self.load()
+
     def test_changed_inference_hash_is_rejected(self):
         with self.current[0].open('a') as f:
             f.write('\n')
