@@ -1,5 +1,7 @@
 import argparse
+import csv
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -8,9 +10,54 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from data import ABLATIONS, METHODS, SourceStore, digest, index_judges, load_csvs, process_cell
 from significance import dataset_sign_tests
-from tables import write_csv, write_significance_tables, write_tables
+from tables import write_csv, write_paper_table, write_significance_tables, write_tables
 from prepare import prepare_pools
 from cagecal import DEFAULT_RUN, append_results
+
+RAW_METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
+
+
+def preserve_verified_raw(rows, metadata, directory, pool_dir, estimators):
+    saved_path = directory / "atomic.csv"
+    if not saved_path.exists():
+        return None
+    saved_manifest = json.loads((directory / "manifest.json").read_text())
+    expected_inputs = {str(pool_dir / f"{estimator}.csv"): digest(pool_dir / f"{estimator}.csv")
+                       for estimator in estimators}
+    if saved_manifest["pool_inputs"] != expected_inputs:
+        raise ValueError("saved raw report used different fitted pooling inputs")
+    saved_audit = json.loads((directory / "audit.json").read_text())
+    identity = lambda row: (row["task"], row["estimator"], row["models"])
+    earlier = {identity(row): row for row in saved_audit}
+    for cell in metadata:
+        prior = earlier.get(identity(cell))
+        if prior is None or prior["matched_ids"] != cell["matched_ids"] or prior["selected_targets"] != cell["selected_targets"]:
+            raise ValueError(f"saved question mask or selected answers changed: {identity(cell)}")
+    with saved_path.open(newline="") as handle:
+        saved = {(row["task"], row["estimator"], row["models"], row["method"]): row
+                 for row in csv.DictReader(handle)}
+    if len(saved) != len(rows):
+        raise ValueError("saved method/group rows differ from replay")
+    largest = 0.0
+    for row in rows:
+        key = (*identity(row), row["method"])
+        prior = saved.get(key)
+        if prior is None:
+            raise ValueError(f"saved method/group row is absent: {key}")
+        for metric in RAW_METRICS:
+            for field in (metric, f"reference_{metric}", f"delta_{metric}"):
+                before = float(prior[field]) if prior[field] else None
+                after = row[field]
+                if before is None or after is None:
+                    if before != after:
+                        raise ValueError(f"saved raw metric availability changed: {key}/{field}")
+                else:
+                    difference = abs(before - after)
+                    if not math.isfinite(difference) or difference > 1e-4:
+                        raise ValueError(f"saved raw metric changed: {key}/{field}: {difference}")
+                    largest = max(largest, difference)
+                row[field] = before
+    return largest
 
 
 def parse_args():
@@ -75,10 +122,18 @@ def main():
     if not args.no_cagecal:
         rows, cagecal_labels, cagecal = append_results(rows, metadata, args.cagecal_dir, args.cagecal_score)
         labels.update(cagecal_labels)
+    raw_replay_difference = preserve_verified_raw(rows, metadata, args.out_dir, args.pool_dir, args.estimators)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(args.out_dir / "atomic.csv", rows)
     (args.out_dir / "audit.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n")
     files = write_tables(args.out_dir, rows, metadata, args.estimators, labels, args.tasks)
+    if args.out_dir == ROOT / "paper_results/results/voting_protocol":
+        paper_tables = ROOT / "paper_results/z_paper_tables"
+        for estimator, name in (("cons", "voting_constitency.tex"), ("seq", "voting_seq_proba.tex")):
+            if estimator in args.estimators:
+                path = paper_tables / name
+                write_paper_table(path, rows, metadata, estimator, labels, args.tasks)
+                files.append(str(path))
     statistics_path = args.out_dir / "significance.csv"
     if args.significance:
         tested_labels = {method: label for method, label in labels.items()
@@ -97,6 +152,8 @@ def main():
                 "judge_score": "reused verbalized score; stale-target proxy when old and new answers differ" if args.judge_policy == "approximate" else "verbalized confidence in fixed answer",
                 "judge_policy": args.judge_policy, "tie_break": args.tie_break, "tie_seed": args.tie_seed,
                 "question_mask": "intersection of valid solo, pooling and all present selected judge scores per cell",
+                "temperature_calibration": "one output temperature fitted by NLL on the original fitting split; raw ranking metrics unchanged",
+                "max_raw_replay_difference": raw_replay_difference,
                 "missing_judge_cells": "omitted; counts in separate coverage tables; no substitution",
                 "inference": False, "refitting": args.refit, "cagecal": cagecal, "method_labels": labels}
     (args.out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

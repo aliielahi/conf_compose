@@ -1,0 +1,29 @@
+\begin{table*}[t]
+\centering
+\caption{Confidence quality after one debate round. Absolute metrics are averaged across available model groups (15 per dataset, except one zero-coverage logistic-pooling group on BoolQ); entries are mean $\pm$ sample SD. All methods score the same selected answer.}
+\label{tab:debate-consistency-absolute}
+\setlength{\tabcolsep}{2.6pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{3}{c}{CSQA} & \multicolumn{3}{c}{BOOLQ} & \multicolumn{3}{c}{GSM8K} & \multicolumn{3}{c}{TRUTHFULQA} & \multicolumn{3}{c}{GPQA} \\
+Method & t-ECE $\downarrow$ & t-Brier $\downarrow$ & AUARC $\uparrow$ & t-ECE $\downarrow$ & t-Brier $\downarrow$ & AUARC $\uparrow$ & t-ECE $\downarrow$ & t-Brier $\downarrow$ & AUARC $\uparrow$ & t-ECE $\downarrow$ & t-Brier $\downarrow$ & AUARC $\uparrow$ & t-ECE $\downarrow$ & t-Brier $\downarrow$ & AUARC $\uparrow$ \\
+\midrule
+\multicolumn{16}{l}{\textbf{Reference}}\\
+Single stream, same answer & \gthird{0.039 {\scriptsize $\pm$ 0.013}} & 0.153 {\scriptsize $\pm$ 0.007} & 0.850 {\scriptsize $\pm$ 0.012} & 0.042 {\scriptsize $\pm$ 0.017} & 0.110 {\scriptsize $\pm$ 0.006} & 0.906 {\scriptsize $\pm$ 0.011} & 0.021 {\scriptsize $\pm$ 0.006} & 0.041 {\scriptsize $\pm$ 0.007} & 0.969 {\scriptsize $\pm$ 0.006} & \gfirst{0.059 {\scriptsize $\pm$ 0.017}} & 0.144 {\scriptsize $\pm$ 0.013} & 0.857 {\scriptsize $\pm$ 0.023} & \gthird{0.125 {\scriptsize $\pm$ 0.044}} & 0.256 {\scriptsize $\pm$ 0.007} & 0.530 {\scriptsize $\pm$ 0.047} \\
+\midrule
+\multicolumn{16}{l}{\textbf{No learned combination weights}}\\
+Arithmetic mean & \gfirst{0.034 {\scriptsize $\pm$ 0.010}} & \gfirst{0.136 {\scriptsize $\pm$ 0.009}} & 0.893 {\scriptsize $\pm$ 0.020} & 0.027 {\scriptsize $\pm$ 0.017} & 0.103 {\scriptsize $\pm$ 0.006} & 0.921 {\scriptsize $\pm$ 0.013} & \gsecond{0.015 {\scriptsize $\pm$ 0.005}} & \gsecond{0.038 {\scriptsize $\pm$ 0.006}} & 0.982 {\scriptsize $\pm$ 0.007} & \gsecond{0.062 {\scriptsize $\pm$ 0.019}} & 0.134 {\scriptsize $\pm$ 0.015} & 0.906 {\scriptsize $\pm$ 0.027} & \gsecond{0.123 {\scriptsize $\pm$ 0.037}} & \gsecond{0.253 {\scriptsize $\pm$ 0.006}} & \gthird{0.561 {\scriptsize $\pm$ 0.049}} \\
+Log-odds sum & 0.040 {\scriptsize $\pm$ 0.008} & \gthird{0.137 {\scriptsize $\pm$ 0.010}} & \gthird{0.893 {\scriptsize $\pm$ 0.021}} & \gthird{0.022 {\scriptsize $\pm$ 0.009}} & 0.102 {\scriptsize $\pm$ 0.006} & 0.921 {\scriptsize $\pm$ 0.013} & \gfirst{0.015 {\scriptsize $\pm$ 0.004}} & \gfirst{0.038 {\scriptsize $\pm$ 0.006}} & \gsecond{0.982 {\scriptsize $\pm$ 0.007}} & 0.071 {\scriptsize $\pm$ 0.019} & 0.135 {\scriptsize $\pm$ 0.016} & 0.907 {\scriptsize $\pm$ 0.027} & \gfirst{0.115 {\scriptsize $\pm$ 0.045}} & \gfirst{0.252 {\scriptsize $\pm$ 0.006}} & \gsecond{0.562 {\scriptsize $\pm$ 0.049}} \\
+\midrule
+\multicolumn{16}{l}{\textbf{Learned per-model weights}}\\
+Kahn (full covariance) & 0.042 {\scriptsize $\pm$ 0.010} & 0.139 {\scriptsize $\pm$ 0.008} & 0.891 {\scriptsize $\pm$ 0.020} & 0.034 {\scriptsize $\pm$ 0.007} & \gthird{0.100 {\scriptsize $\pm$ 0.008}} & \gsecond{0.927 {\scriptsize $\pm$ 0.016}} & 0.037 {\scriptsize $\pm$ 0.004} & 0.044 {\scriptsize $\pm$ 0.008} & 0.980 {\scriptsize $\pm$ 0.007} & 0.072 {\scriptsize $\pm$ 0.014} & \gthird{0.133 {\scriptsize $\pm$ 0.015}} & \gthird{0.907 {\scriptsize $\pm$ 0.025}} & 0.151 {\scriptsize $\pm$ 0.050} & \gthird{0.254 {\scriptsize $\pm$ 0.025}} & 0.559 {\scriptsize $\pm$ 0.051} \\
+Kahn (diagonal covariance) & 0.060 {\scriptsize $\pm$ 0.021} & 0.142 {\scriptsize $\pm$ 0.007} & \gfirst{0.894 {\scriptsize $\pm$ 0.021}} & 0.052 {\scriptsize $\pm$ 0.016} & 0.105 {\scriptsize $\pm$ 0.005} & \gfirst{0.927 {\scriptsize $\pm$ 0.016}} & 0.050 {\scriptsize $\pm$ 0.010} & 0.048 {\scriptsize $\pm$ 0.007} & \gfirst{0.982 {\scriptsize $\pm$ 0.007}} & 0.093 {\scriptsize $\pm$ 0.021} & 0.138 {\scriptsize $\pm$ 0.011} & \gfirst{0.908 {\scriptsize $\pm$ 0.028}} & 0.153 {\scriptsize $\pm$ 0.058} & 0.254 {\scriptsize $\pm$ 0.027} & \gfirst{0.565 {\scriptsize $\pm$ 0.050}} \\
+Weighted BLP & 0.039 {\scriptsize $\pm$ 0.011} & \gsecond{0.137 {\scriptsize $\pm$ 0.009}} & \gsecond{0.894 {\scriptsize $\pm$ 0.020}} & \gfirst{0.017 {\scriptsize $\pm$ 0.006}} & \gfirst{0.098 {\scriptsize $\pm$ 0.007}} & 0.925 {\scriptsize $\pm$ 0.014} & \gthird{0.015 {\scriptsize $\pm$ 0.005}} & \gthird{0.038 {\scriptsize $\pm$ 0.007}} & \gthird{0.982 {\scriptsize $\pm$ 0.007}} & \gthird{0.062 {\scriptsize $\pm$ 0.017}} & \gfirst{0.131 {\scriptsize $\pm$ 0.017}} & \gsecond{0.908 {\scriptsize $\pm$ 0.028}} & 0.149 {\scriptsize $\pm$ 0.061} & 0.256 {\scriptsize $\pm$ 0.026} & 0.559 {\scriptsize $\pm$ 0.061} \\
+Regularized logistic pooling & \gsecond{0.038 {\scriptsize $\pm$ 0.007}} & 0.138 {\scriptsize $\pm$ 0.008} & 0.891 {\scriptsize $\pm$ 0.019} & \gsecond{0.022 {\scriptsize $\pm$ 0.005}} & \gsecond{0.098 {\scriptsize $\pm$ 0.008}} & \gthird{0.927 {\scriptsize $\pm$ 0.017}} & 0.017 {\scriptsize $\pm$ 0.005} & 0.039 {\scriptsize $\pm$ 0.007} & 0.981 {\scriptsize $\pm$ 0.007} & 0.068 {\scriptsize $\pm$ 0.020} & \gsecond{0.132 {\scriptsize $\pm$ 0.016}} & 0.907 {\scriptsize $\pm$ 0.025} & 0.148 {\scriptsize $\pm$ 0.056} & 0.255 {\scriptsize $\pm$ 0.025} & 0.557 {\scriptsize $\pm$ 0.052} \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{2pt}
+\parbox{\textwidth}{\footnotesize t-Brier applies one output temperature fitted by NLL on the fitting split and held fixed on evaluation. AUARC uses the original ranking. Lower t-ECE and t-Brier, and higher AUARC, are better.}
+\end{table*}

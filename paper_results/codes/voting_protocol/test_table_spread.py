@@ -2,6 +2,8 @@ import unittest
 from statistics import stdev
 
 from tables import FULL_METRICS, aggregate, display, render_table
+from conf_compose.utils.calibration import fit_temperature, temperature_scale
+from conf_compose.utils.metrics import nll
 
 
 class DeltaSpreadTest(unittest.TestCase):
@@ -36,6 +38,15 @@ class DeltaSpreadTest(unittest.TestCase):
     def test_absolute_unchanged(self):
         self.assertEqual(display(0.1, 15, 15, 0.2, delta=False), '10.00')
         self.assertEqual(display(0.1, 15, 15, 0.2, delta=False, metric='nll'), '0.100')
+
+    def test_temperature_changes_probabilities_without_changing_order(self):
+        scores = [0.1, 0.3, 0.6, 0.8, 0.9]
+        labels = [0, 1, 0, 1, 1]
+        temperature = fit_temperature(scores, labels)
+        scaled = temperature_scale(scores, temperature)
+        self.assertLessEqual(nll(scaled, labels), nll(scores, labels) + 1e-12)
+        self.assertEqual(list(sorted(range(len(scores)), key=lambda i: scores[i])),
+                         list(sorted(range(len(scores)), key=lambda i: scaled[i])))
 
 
 if __name__ == '__main__':

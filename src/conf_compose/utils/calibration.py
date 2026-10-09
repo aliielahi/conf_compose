@@ -85,3 +85,39 @@ class BetaCalibrator(Calibrator):
 
 
 CALIBRATORS = {"platt": PlattCalibrator, "beta": BetaCalibrator}
+
+
+def temperature_scale(conf: Sequence[float], temperature: float) -> np.ndarray:
+    if temperature <= 0:
+        raise ValueError("temperature must be positive")
+    probabilities = np.clip(np.asarray(conf, dtype=float), 1e-6, 1 - 1e-6)
+    logits = np.log(probabilities) - np.log1p(-probabilities)
+    scaled = np.clip(logits / temperature, -700, 700)
+    return 1 / (1 + np.exp(-scaled))
+
+
+def fit_temperature(conf: Sequence[float], correct: Sequence[float]) -> float:
+    probabilities = np.asarray(conf, dtype=float)
+    labels = np.asarray(correct, dtype=float)
+    if probabilities.ndim != 1 or probabilities.shape != labels.shape or not len(labels):
+        raise ValueError("temperature fitting needs nonempty, paired 1-D arrays")
+    if not np.isfinite(probabilities).all() or not np.isfinite(labels).all():
+        raise ValueError("temperature fitting received nonfinite values")
+    logits = np.log(np.clip(probabilities, 1e-6, 1 - 1e-6)) - np.log1p(-np.clip(probabilities, 1e-6, 1 - 1e-6))
+
+    def loss(log_temperature: float) -> float:
+        scaled = logits * np.exp(-log_temperature)
+        return float(np.mean(np.logaddexp(0, scaled) - labels * scaled))
+
+    left, right = np.log(0.05), np.log(20.0)
+    ratio = (np.sqrt(5) - 1) / 2
+    a, b = right - ratio * (right - left), left + ratio * (right - left)
+    for _ in range(80):
+        if loss(a) < loss(b):
+            right, b = b, a
+            a = right - ratio * (right - left)
+        else:
+            left, a = a, b
+            b = left + ratio * (right - left)
+    chosen = min((left, (left + right) / 2, right, 0.0), key=loss)
+    return float(np.exp(chosen))

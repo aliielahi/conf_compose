@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cagecal import append_results, ids_digest
+from cagecal import RAW_METRICS, append_results, ids_digest
 from tables import FULL_METRICS, write_csv
 from conf_compose.utils import metrics
 
@@ -28,7 +28,7 @@ class CagecalTest(unittest.TestCase):
         self.save('calibration.json', {})
         self.save('paper_tables/audit.json', [self.cell])
         self.save_predictions()
-        values = {metric: getattr(metrics, metric)([0.8, 0.2], [1, 0]) for metric in FULL_METRICS if metric != 'accuracy'}
+        values = {metric: getattr(metrics, metric)([0.8, 0.2], [1, 0]) for metric in RAW_METRICS if metric != 'accuracy'}
         write_csv(self.directory / 'paper_tables/cagecal_metrics.csv',
                   [dict(task='csqa', models='a|b', estimator='cons', method=method, accuracy=0.5, **values)
                    for method in ('cagecal_iid', 'cagecal_iid_betasb')])
@@ -44,6 +44,7 @@ class CagecalTest(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[-1]['accuracy'], 0.5)
         self.assertAlmostEqual(rows[-1]['delta_brier'], 0.04 - 0.25)
+        self.assertIsNone(rows[-1]['t_brier'])
         self.assertEqual(provenance['n_cells'], 1)
         again, _, _ = append_results(rows, [self.cell], self.directory)
         self.assertEqual(rows, again)

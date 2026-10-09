@@ -14,6 +14,8 @@ from .data import ROOT, DEFAULT_PROJECT, digest, file_hash, load_bundle, safe_ou
 
 def arguments():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--protocol", choices=("voting", "debate"), default="voting")
+    p.add_argument("--debate-table", type=Path, help="Debate paper directory containing audit.json, atomic.csv and manifest.json")
     p.add_argument("--project", type=Path, default=DEFAULT_PROJECT)
     p.add_argument("--tasks", nargs="+", default=None)
     p.add_argument("--panel", nargs="+", help="Ordered aliases, e.g. q3-4bi l31-8bi g3-12i; default all paper groups")
@@ -30,7 +32,7 @@ def arguments():
     p.add_argument("--validation-fraction", type=float, default=0.2)
     p.add_argument("--split-seed", type=int, default=0)
     p.add_argument("--embedding-model", default="sentence-transformers/all-MiniLM-L6-v2")
-    p.add_argument("--output-root", type=Path, default=ROOT / "results/voting_adapter")
+    p.add_argument("--output-root", type=Path, default=None)
     args = p.parse_args()
     if min(args.seeds, args.epochs, args.batch_size, args.neighbors) < 1 or not 0 < args.validation_fraction < 1:
         p.error("positive counts and 0 < --validation-fraction < 1 are required")
@@ -58,7 +60,7 @@ def manifest_for(bundle, args):
     config = {key: getattr(args, key) for key in ("seeds", "epochs", "batch_size", "neighbors", "validation_fraction",
                                                 "split_seed", "embedding_model")}
     config.update(tasks=sorted(bundle["splits"]), panels=sorted({g["models"] for g in bundle["groups"]}),
-                  topology="iid", voter=0, response_logprob=True, brier_weight=0.4,
+                  protocol=args.protocol, topology="iid" if args.protocol == "voting" else "debate", voter=0, response_logprob=True, brier_weight=0.4,
                   label_smoothing=0.05, min_calibration_questions=50)
     paths = sorted((ROOT / "voting_adapter").glob("*.py")) + sorted((ROOT / "cage_cal").glob("*.py"))
     paths += [ROOT / "scripts/cage_gnn_hypergraph.py", ROOT / "scripts/data_utils.py"]
@@ -66,13 +68,14 @@ def manifest_for(bundle, args):
     sources = dict(bundle["sources"])
     for rel in ("src/conf_compose/utils/metrics.py", "src/conf_compose/data/base.py", "src/conf_compose/data/numeric.py",
                 "src/conf_compose/data/boolean.py", "src/conf_compose/data/multiple_choice.py",
-                "paper_results/codes/voting_protocol/tables.py",
+                "paper_results/codes/voting_protocol/tables.py", "src/conf_compose/utils/calibration.py",
                 "runs/experiment02-voting_composition/atomic.py",
                 "src/conf_compose/composition/methods.py", "src/conf_compose/composition/candidates.py"):
         sources[rel] = file_hash(bundle["project"] / rel)
-    return dict(schema=1, config=config, code=code, sources=sources, splits=bundle["splits"],
+    return dict(schema=2, config=config, code=code, sources=sources, splits=bundle["splits"],
         groups=bundle["groups"], adaptations=[
-            "IID: identical independent panel in both towers; communication adjacency is zero",
+            ("IID: identical independent panel in both towers; communication adjacency is zero" if args.protocol == "voting"
+             else "Debate: observed post-round panel versus saved independent round-0 panel; edges from saved peer visibility"),
             "Voter 0 only; no extra rollouts or consistency samples used as graph nodes",
             "Task-aware equivalence and saved first/confidence/seeded voting rules match the paper manifest",
             "Graph ranks and plurality indicators mark the selected fixed target, including confidence-broken ties",
@@ -82,7 +85,9 @@ def manifest_for(bundle, args):
             "Shared GNN trained jointly across selected tasks/panels, unlike per-panel pool fits",
             "Upstream graph architecture; preserve zero logprobs instead of truthiness fallback",
             "BetaSB uses internal validation; identity fallback for <50 unique questions or a degenerate fit",
-            "Cons/seq rows share CAGE predictions but retain original matched evaluation masks"])
+            "Cons/seq rows share CAGE predictions but retain original matched evaluation masks",
+            "Validation predictions are exported separately; never mixed into evaluation",
+            "Per-panel output temperature fits internal validation, not training or evaluation; BetaSB t-metrics unavailable"])
 
 
 def runtime_info():
@@ -108,19 +113,29 @@ def main():
     if args.finish_only:
         saved_dir = safe_output(args.finish_only)
         previous = json.loads((saved_dir / "manifest.json").read_text())
-        for key in ("seeds", "epochs", "batch_size", "neighbors", "validation_fraction", "split_seed", "embedding_model", "tasks"):
-            setattr(args, key, previous["config"][key])
+        for key in ("seeds", "epochs", "batch_size", "neighbors", "validation_fraction", "split_seed", "embedding_model", "tasks", "protocol"):
+            setattr(args, key, previous["config"].get(key, "voting") if key == "protocol" else previous["config"][key])
         panels = previous["config"]["panels"]
         args.panel = panels[0].split("|") if len(panels) == 1 else None
-    bundle = load_bundle(args.project, args.tasks, args.panel, args.validation_fraction, args.split_seed)
+    if args.protocol == "debate":
+        from .debate_data import load_debate_bundle
+        if previous:
+            args.debate_table = args.project / previous["debate_table"]
+        bundle = load_debate_bundle(args.project, args.tasks, args.panel, args.validation_fraction, args.split_seed, args.debate_table)
+    else:
+        bundle = load_bundle(args.project, args.tasks, args.panel, args.validation_fraction, args.split_seed)
     for g in bundle["groups"]:
         print(f"{g['task']} | {g['models']} | {g['counts']} | missing features={len(g['missing_feature_ids'])}")
     print(f"Audited {len(bundle['groups'])} panels and {len(bundle['cells'])} estimator-table cells; majority accuracy matches.")
     if args.audit_only:
         return
+    if args.output_root is None:
+        args.output_root = ROOT / "results" / ("debate_adapter" if args.protocol == "debate" else "voting_adapter")
     safe_output(args.output_root)
     contain_caches()
     manifest = manifest_for(bundle, args)
+    if args.protocol == "debate":
+        manifest["debate_table"] = str(bundle["atomic_path"].parent.relative_to(bundle["project"]))
     identity = digest(manifest)
     run_dir = safe_output(args.finish_only or args.report_only or (args.output_root / identity[:16]))
     if args.finish_only:

@@ -11,9 +11,11 @@ import numpy as np
 from conf_compose.composition.pooling import FittedBLP, FittedPool, pool_methods
 from conf_compose.constants import ROOT
 from conf_compose.data import Example, get_task
+from conf_compose.utils.calibration import fit_temperature, temperature_scale
 from conf_compose.utils.metrics import auarc, auroc, brier, ece, nll
 
 METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
+REPORT_METRICS = (*METRICS, "t_brier", "t_ece")
 LOWER_IS_BETTER = {"ece", "brier", "nll"}
 METHODS = {
     "mean": "Arithmetic mean",
@@ -337,22 +339,62 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
     solo_accuracy = [float(np.mean(correct)) for correct in solo_labels]
     indices = reference_indices(reference, fitting_accuracy, solo_metrics, solo_accuracy, fitting_metrics)
     baseline = {metric: solo_metrics[indices[metric]][metric] for metric in METRICS}
+    fit_values = {method: [] for method in values}
+    fit_labels = {method: [] for method in values}
+    for item in fitting:
+        target, _, scores = atomic.confidence_scores(task, item, args, fitting_records)
+        if target is None or not all(valid_probability(score) for score in scores):
+            continue
+        label = float(task.is_correct(target, Example(item.example_id, item.question, item.gold)))
+        predictions = pool_methods(scores)
+        predictions.update({method: fit.predict(scores) for method, fit in fitted.items() if method not in unavailable})
+        for method in active_methods:
+            probability = predictions[method].score
+            if valid_probability(probability):
+                fit_values[method].append(probability)
+                fit_labels[method].append(label)
+        for method, verdicts in judge_rows.items():
+            verdict = verdicts.get(item.example_id)
+            if verdict is not None and valid_probability(verdict.get("verbalized")):
+                fit_values[method].append(float(verdict["verbalized"]))
+                fit_labels[method].append(label)
+    solo_temperatures = [fit_temperature(scores, labels) if scores else None
+                         for scores, labels in zip(fitting_scores, fitting_labels)]
+    temperatures = {method: fit_temperature(fit_values[method], fit_labels[method]) if fit_values[method] else None
+                    for method in values}
+    solo_t = []
+    for index, temperature in enumerate(solo_temperatures):
+        scaled = temperature_scale(solo[index], temperature) if temperature is not None else None
+        solo_t.append({"t_brier": float(brier(scaled, solo_labels[index])) if scaled is not None else None,
+                       "t_ece": float(ece(scaled, solo_labels[index])) if scaled is not None else None})
+    baseline["t_brier"] = solo_t[indices["brier"]]["t_brier"]
+    baseline["t_ece"] = solo_t[indices["ece"]]["t_ece"]
+    metadata["output_temperatures"] = temperatures
+    metadata["solo_output_temperatures"] = dict(zip(group, solo_temperatures))
     metadata["reference_models"] = {metric: group[indices[metric]] for metric in METRICS}
     metadata["solo_metrics"] = {model: {**solo_metrics[index], "accuracy": solo_accuracy[index]} for index, model in enumerate(group)}
     metadata["vote_accuracy"] = float(np.mean(labels))
     output = []
     for method in ["best_solo", *values]:
-        metrics = baseline if method == "best_solo" else metric_values(values[method], labels, rankings[method])
+        scores = baseline if method == "best_solo" else metric_values(values[method], labels, rankings[method])
+        if method != "best_solo":
+            temperature = temperatures[method]
+            scaled = temperature_scale(values[method], temperature) if temperature is not None else None
+            scores["t_brier"] = float(brier(scaled, labels)) if scaled is not None else None
+            scores["t_ece"] = float(ece(scaled, labels)) if scaled is not None else None
         entry = {key: metadata[key] for key in ("task", "estimator", "models", "n_models", "n_matched", "coverage", "reference_mode")}
         entry.update(method=method, tie_break=args.tie_break, tie_seed=args.tie_seed,
+                     output_temperature=(solo_temperatures[indices["brier"]] if method == "best_solo"
+                                         else temperatures[method]),
                      judge_approximate=method.startswith("judge:") and judge_policy == "approximate",
                      judge_target_mismatches=len(metadata["judge_target_mismatch_ids"].get(method, [])))
-        for metric in METRICS:
-            entry[metric] = metrics[metric]
+        for metric in REPORT_METRICS:
+            entry[metric] = scores[metric]
             entry[f"reference_{metric}"] = baseline[metric]
-            entry[f"delta_{metric}"] = (metrics[metric] - baseline[metric]
-                                         if metrics[metric] is not None and baseline[metric] is not None else None)
-            entry[f"reference_{metric}_model"] = group[indices[metric]]
-            entry[f"reference_{metric}_accuracy"] = solo_accuracy[indices[metric]]
+            entry[f"delta_{metric}"] = (scores[metric] - baseline[metric]
+                                         if scores[metric] is not None and baseline[metric] is not None else None)
+            reference_metric = metric[2:] if metric.startswith("t_") else metric
+            entry[f"reference_{metric}_model"] = group[indices[reference_metric]]
+            entry[f"reference_{metric}_accuracy"] = solo_accuracy[indices[reference_metric]]
         output.append(entry)
     return output, metadata

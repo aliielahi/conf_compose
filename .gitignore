@@ -21,3 +21,7 @@ results/
 current_run.log
 current_run.tmp
 .voting-report-runtime
+
+brainstorms/
+
+brainstorms_codex

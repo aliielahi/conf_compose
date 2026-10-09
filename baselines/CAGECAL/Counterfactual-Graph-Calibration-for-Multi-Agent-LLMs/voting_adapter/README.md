@@ -161,3 +161,60 @@ row order, and finishes from `seed_*_predictions.npz`. It does not train, load
 checkpoints, download models or require a GPU. The original training manifest
 is preserved; `postprocessing.json` records the repair code and runtime. An old
 partial `calibrators.pkl` file is ignored.
+
+## October 9: voting and paired debate, with validation predictions
+
+Use `--protocol voting` (default) or `--protocol debate`. Each command trains a
+separate model. Voting uses the existing voting paper audit; debate discovers a
+single `paper_results/results/debate_protocol/*/cons/manifest.json`. If multiple
+reports exist, pass `--debate-table /workspace/paper_results/results/debate_protocol/<run>/cons`.
+The current debate report is `run_618a3c11ea4498e0/cons` and contains all 75 groups.
+Only round 1 is supported by this paired adapter; another round fails explicitly.
+
+Debate uses each model's original independent answer in the counterfactual tower
+and its revised answer in the interaction tower. Each tower has its own training-only
+local correctness-correlation matrix. Saved peer visibility is checked before
+constructing all-to-all directed communication edges (without self edges).
+This reuses the observed independent answers; it does not generate a new
+counterfactual execution. Report this adaptation explicitly.
+
+The source files contain all questions in `test.jsonl`; the composition audit
+assigns 30% to fitting and the rest to evaluation. We preserve those exact IDs,
+and reserve 20% of fitting questions for internal validation. These are NOT
+new official dataset validation splits. Question splits are shared across panels;
+validation and evaluation labels never enter training-neighbor W estimates.
+
+After copying the updated `voting_adapter/` folder to the GPU baseline:
+
+```bash
+source .venv-voting/bin/activate
+python -B -m unittest voting_adapter.test_adapter voting_adapter.test_debate -v
+python -B -m voting_adapter.run --smoke --device cuda:0
+python -B -m voting_adapter.run --protocol voting --audit-only
+python -B -m voting_adapter.run --protocol debate --audit-only
+python -B -m voting_adapter.run --protocol debate --tasks csqa boolq \
+  --panel q3-4bi l31-8bi g3-12i --seeds 1 --epochs 2 --device cuda:0
+python -B -m voting_adapter.run --protocol voting --device cuda:0
+python -B -m voting_adapter.run --protocol debate --device cuda:0
+```
+
+Full runs default to ten seeds and fifteen maximum epochs. No answering models
+are rerun. Voting outputs stay in `results/voting_adapter/<digest>`; debate
+outputs go to `results/debate_adapter/<digest>`, both inside this baseline.
+Copy the parent `results/debate_inferences`, the referenced
+`results/debate_composition/run_618a3c11ea4498e0`, and its paper report to the GPU
+if missing. Keep the original inference files and existing voting table inputs.
+
+New `validation_predictions.jsonl` contains each usable validation question's
+fixed answer, label, raw seed-ensemble confidence and per-seed confidences.
+`predictions.jsonl` remains evaluation-only. Never merge these files for scoring.
+`paper_tables/atomic.csv` and `cagecal_metrics.csv` include per-group metrics and
+raw-CAGE t-ECE/t-Brier. One temperature per panel fits raw CAGE predictions on
+internal validation only; one-class validation uses identity. `temperatures.json`
+records fit sizes and fallbacks. Raw CAGE AUARC stays unchanged. The BetaSB row
+has no second temperature fit, so its t-metrics are blank. This is different from
+pooling methods' temperatures fitted on their full fitting set and should be
+disclosed. Missing graph features outside the matched mask are listed in the
+manifest; missing features within that mask abort rather than shrink evaluation.
+Old CAGE rows in the input table are removed from the generated table copies.
+Neither the parent paper tables nor inference files are modified.

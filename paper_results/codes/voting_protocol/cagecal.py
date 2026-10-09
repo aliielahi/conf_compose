@@ -15,6 +15,8 @@ from conf_compose.utils import metrics
 from significance import dataset_sign_tests
 from tables import FULL_METRICS, write_csv, write_significance_tables, write_tables
 
+RAW_METRICS = tuple(metric for metric in FULL_METRICS if not metric.startswith("t_"))
+
 DEFAULT_RUN = ROOT / "baselines/CAGECAL/Counterfactual-Graph-Calibration-for-Multi-Agent-LLMs/results/voting_adapter/5f0d2df353f60fe6"
 LABELS = {"cagecal_iid": "CAGE-CAL (IID)", "cagecal_iid_betasb": "CAGE-CAL (IID + BetaSB)"}
 
@@ -79,7 +81,7 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="betasb"):
             raise ValueError(f"invalid CAGE-CAL confidence: {key}")
         correct = np.asarray([row["correct"] for row in selected])
         values = {metric: float(getattr(metrics, metric)(probabilities, correct))
-                  for metric in FULL_METRICS if metric != "accuracy"}
+                  for metric in RAW_METRICS if metric != "accuracy"}
         values["accuracy"] = float(correct.mean())
         if not math.isclose(values["accuracy"], cell["vote_accuracy"], abs_tol=1e-12):
             raise ValueError(f"CAGE-CAL voting accuracy mismatch: {key}")
@@ -89,6 +91,10 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="betasb"):
             if not (math.isnan(value) and math.isnan(expected)) and not math.isclose(value, expected, abs_tol=1e-12):
                 raise ValueError(f"CAGE-CAL saved {metric} does not match predictions: {key}")
         row = dict(references[key], method=method, judge_approximate=False, judge_target_mismatches=0)
+        row["output_temperature"] = None
+        for metric in ("t_brier", "t_ece"):
+            row[metric] = None
+            row[f"delta_{metric}"] = None
         for metric, value in values.items():
             value = value if math.isfinite(value) else None
             reference = row.get(f"reference_{metric}")
@@ -102,6 +108,7 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="betasb"):
                   "prediction": "mean across training seeds, followed by BetaSB when available" if score == "betasb" else "mean across training seeds",
                   "spread": "sample SD across model-group deltas, not training seeds",
                   "same_prediction_across_estimators": "evaluated on each estimator's existing matched question mask"}
+    provenance["temperature_metrics"] = "unavailable: saved predictions contain evaluation questions only"
     return original + appended, {method: LABELS[method]}, provenance
 
 

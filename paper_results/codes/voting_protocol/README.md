@@ -97,12 +97,15 @@ Each `cons/` and `seq/` directory contains TXT and LaTeX versions of:
 - Separate coverage and exploratory significance tables.
 
 All metrics except NLL are displayed multiplied by 100; NLL is in nats. Full
-six-metric tables are wide, so use a landscape page or resize them for Overleaf.
+eight-metric tables are wide, so use a landscape page or resize them for Overleaf.
 Fragments use `booktabs` and can be inserted with `\\input{...}`. Raw CSV values
 are unscaled. AUROC is unavailable for one-class question sets, never invented.
 
 `atomic.csv` contains each dataset/group/estimator/method's absolute metrics,
 within-group deltas, reference model, coverage, selection rule and judge flags.
+The t-ECE and t-Brier columns apply a single output temperature fitted by NLL
+on the original fitting questions. Raw AUARC and AUROC are unchanged. CAGE-CAL
+t metrics are blank because its saved predictions contain evaluation questions only.
 `audit.json` contains source hashes, fitting metrics, target changes, matched IDs,
 all solo metrics, judge mismatches, selection fallback reasons and replay differences. `manifest.json` records
 inputs, code hashes, aggregation choices and all table paths.

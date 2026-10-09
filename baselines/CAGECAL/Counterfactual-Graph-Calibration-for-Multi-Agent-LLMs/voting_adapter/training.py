@@ -19,29 +19,34 @@ def upstream():
     return graph
 
 
-def make_graph(row, matrix, answers):
+def make_graph(row, matrix, answers, initial_matrix=None):
     graph = upstream()
     agents = [model + "::voter" for model in row["model_ids"]]
-    panel = {agent: {"answer": answer, "mean_logprob": lp}
-             for agent, answer, lp in zip(agents, row["answers"], row["mean_logprobs"])}
-    data = graph.panel_to_hyperdata(panel, panel, agents, matrix, matrix,
-                                   np.zeros_like(matrix), answers, "iid")
-    # Upstream uses `lp or -5.0`: retain a legitimate zero log-probability.
+    debate = row.get("protocol") == "debate"
+    initial_answers = row["initial_answers"] if debate else row["answers"]
+    initial_lp = row["initial_mean_logprobs"] if debate else row["mean_logprobs"]
+    panel = {a: {"answer": answer, "mean_logprob": lp}
+             for a, answer, lp in zip(agents, row["answers"], row["mean_logprobs"])}
+    panel0 = {a: {"answer": answer, "mean_logprob": lp}
+              for a, answer, lp in zip(agents, initial_answers, initial_lp)}
+    if debate and initial_matrix is None:
+        raise ValueError("Debate requires a separately estimated round-0 W")
+    communication = np.asarray(row["communication"], dtype=float) if debate else np.zeros_like(matrix)
+    data = graph.panel_to_hyperdata(panel, panel0, agents, matrix,
+        initial_matrix if debate else matrix, communication, answers, "debate" if debate else "iid")
     import torch
-    lp = torch.tensor((np.clip(row["mean_logprobs"], -10, 0) + 5) / 5, dtype=torch.float32)
-    data.x_T[:, 0] = lp
-    data.x_0[:, 0] = lp
-    # Upstream Counter breaks ties by insertion order. Mark the actual fixed
-    # paper target instead; otherwise the graph would describe another answer.
-    counts = Counter(row["answers"])
-    target = row.get("target", counts.most_common(1)[0][0])
-    if target not in counts or counts[target] != max(counts.values()):
-        raise ValueError("Fixed target is not a majority candidate")
-    ordered = sorted(counts, key=lambda answer: (-counts[answer], answer != target))
-    ranks = {answer: index for index, answer in enumerate(ordered)}
-    for x in (data.x_T, data.x_0):
-        x[:, 1] = torch.tensor([ranks[a] / max(len(counts) - 1, 1) for a in row["answers"]])
-        x[:, 5] = torch.tensor([float(a == target) for a in row["answers"]])
+    for x, values, lps, target in (
+        (data.x_T, row["answers"], row["mean_logprobs"], row.get("target")),
+        (data.x_0, initial_answers, initial_lp, row.get("initial_target") if debate else row.get("target"))):
+        x[:, 0] = torch.tensor((np.clip(lps, -10, 0) + 5) / 5, dtype=torch.float32)
+        counts = Counter(values)
+        target = target if target is not None else counts.most_common(1)[0][0]
+        if target not in counts or counts[target] != max(counts.values()):
+            raise ValueError("Fixed target is not a majority candidate")
+        ordered = sorted(counts, key=lambda answer: (-counts[answer], answer != target))
+        ranks = {answer: index for index, answer in enumerate(ordered)}
+        x[:, 1] = torch.tensor([ranks[a] / max(len(counts) - 1, 1) for a in values])
+        x[:, 5] = torch.tensor([float(a == target) for a in values])
     return data
 
 
@@ -49,7 +54,7 @@ def prepare_features(bundle, run_dir, args):
     from sentence_transformers import SentenceTransformer
     rows = bundle["rows"]
     questions = {(r["task"], r["id"]): r["question"] for r in rows}
-    answer_texts = sorted({a for r in rows for a in r["answers"]})
+    answer_texts = sorted({a for r in rows for a in r["answers"] + r.get("initial_answers", [])})
     qkeys = sorted(questions)
     cache = run_dir / "embeddings.npz"
     if cache.exists():
@@ -73,19 +78,25 @@ def prepare_features(bundle, run_dir, args):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     embeddings = dict(zip(answer_texts, aemb))
-    projected, pca = answer_projection(embeddings, [a for r in rows if r["split"] == "train" for a in r["answers"]])
+    projected, pca = answer_projection(embeddings, [a for r in rows if r["split"] == "train" for a in r["answers"] + r.get("initial_answers", [])])
     np.savez_compressed(run_dir / "answer_pca.npz", **pca)
     matrices = query_matrices(rows, dict(zip(qkeys, qemb)), args.neighbors)
+    initial_matrices = (query_matrices(rows, dict(zip(qkeys, qemb)), args.neighbors, "initial_member_correct")
+                        if bundle.get("protocol") == "debate" else {})
     datasets = {name: [] for name in ("train", "validation", "evaluation")}
     with (run_dir / "features.jsonl").open("w") as f:
         for row in rows:
             key = (row["task"], row["models"], row["id"])
             w, neighbors = matrices[key]
-            data = make_graph(row, w, projected)
+            w0 = initial_matrices[key][0] if key in initial_matrices else None
+            data = make_graph(row, w, projected, w0)
             datasets[row["split"]].append(dict(row=row, data=data))
             f.write(json.dumps(dict(task=row["task"], models=row["models"], id=row["id"],
                 split=row["split"], target=row["target"], selection_reason=row.get("selection_reason"), answers=row["answers"],
-                mean_logprobs=row["mean_logprobs"], training_neighbors=neighbors, W=w.tolist())) + "\n")
+                mean_logprobs=row["mean_logprobs"], training_neighbors=neighbors, W=w.tolist(),
+                initial_answers=row.get("initial_answers"), initial_mean_logprobs=row.get("initial_mean_logprobs"),
+                W_0=w0.tolist() if w0 is not None else w.tolist(), communication=row.get("communication"),
+                protocol=bundle.get("protocol", "voting"))) + "\n")
     return datasets
 
 
@@ -264,6 +275,16 @@ def finalize_predictions(datasets, val_preds, eval_preds, tasks, split_seed, run
     pv = np.mean(val_preds, axis=0)
     np.random.seed(split_seed)
     adjusted = calibrate(pv, raw, datasets["validation"], datasets["evaluation"], tasks, run_dir)
+    # Save held-out validation scores separately so temperature calibration and
+    # later table code do not have to reconstruct them from unlabeled arrays.
+    validation_path = run_dir / "validation_predictions.partial.jsonl"
+    with validation_path.open("w") as f:
+        for i, example in enumerate(datasets["validation"]):
+            r = example["row"]
+            row = {k: r[k] for k in ("task", "models", "id", "target", "correct")}
+            row.update(split="validation", raw=float(pv[i]), per_seed=[float(p[i]) for p in val_preds])
+            f.write(json.dumps(row) + "\n")
+    validation_path.replace(run_dir / "validation_predictions.jsonl")
     path = run_dir / "predictions.jsonl"
     tmp = run_dir / "predictions.partial.jsonl"
     with tmp.open("w") as f:

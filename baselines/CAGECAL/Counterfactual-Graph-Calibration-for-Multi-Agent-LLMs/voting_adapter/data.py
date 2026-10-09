@@ -161,7 +161,8 @@ def read_records(path):
             if qid in out:
                 raise ValueError(f"Duplicate question {qid} in {path}")
             row = {k: raw.get(k) for k in
-                   ("id", "question", "gold", "prediction", "correct", "options", "choices")}
+                   ("id", "question", "gold", "prediction", "correct", "options", "choices",
+                    "round", "model", "group", "peer_order", "error")}
             lp = (raw.get("token_logprobs") or {}).get("response")
             row["samples"] = (raw.get("sampled_answers") or {}).get("consistency_t0.7", [])
             row["mean_logprob"] = (sum(lp) / len(lp) if lp and

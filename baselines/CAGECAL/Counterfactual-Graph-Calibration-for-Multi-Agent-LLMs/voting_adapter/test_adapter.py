@@ -141,6 +141,20 @@ class AdapterTests(unittest.TestCase):
             self.assertNotIn(key[2], neighbors)
         np.testing.assert_allclose(original[("t", "a|b", "4")][0], np.ones((2, 2)), atol=1e-6)
 
+    def test_debate_initial_correlations_use_initial_training_labels(self):
+        rows = [dict(task="t", models="a|b", model_ids=["a", "b"], id=str(i),
+                     split="train" if i < 4 else "evaluation",
+                     member_correct=[i % 2, i % 2],
+                     initial_member_correct=[i % 2, 1 - i % 2]) for i in range(5)]
+        emb = {("t", str(i)): np.array([1., 0.]) for i in range(5)}
+        current = query_matrices(rows, emb)
+        before = query_matrices(rows, emb, correctness_key="initial_member_correct")
+        self.assertGreater(current[("t", "a|b", "4")][0][0, 1], .99)
+        self.assertLess(before[("t", "a|b", "4")][0][0, 1], -.99)
+        del rows[-1]["initial_member_correct"]
+        again = query_matrices(rows, emb, correctness_key="initial_member_correct")
+        np.testing.assert_array_equal(before[("t", "a|b", "4")][0], again[("t", "a|b", "4")][0])
+
     def test_degenerate_correlations(self):
         np.testing.assert_array_equal(pearson_matrix([[1, 1], [1, 1]], 2), np.eye(2))
         np.testing.assert_array_equal(pearson_matrix([], 3), np.eye(3))
@@ -230,6 +244,10 @@ class AdapterTests(unittest.TestCase):
             np.testing.assert_allclose([r["betasb"] for r in predictions], [0.35, 0.65])
             self.assertFalse((tmp / "calibrators.pkl").exists())
             self.assertEqual(original, (tmp / "seed_0_predictions.npz").read_bytes())
+            vals = [json.loads(line) for line in (tmp / "validation_predictions.jsonl").read_text().splitlines()]
+            self.assertEqual(len(vals), 60)
+            self.assertTrue(all(r["split"] == "validation" for r in vals))
+            np.testing.assert_allclose([r["raw"] for r in vals], np.linspace(0.1, 0.9, 60))
             with np.load(tmp / "calibration_inputs.npz", allow_pickle=False) as saved:
                 self.assertEqual(saved["validation_ids"].shape, (60,))
                 np.testing.assert_allclose(saved["calibrated_probabilities"], [0.35, 0.65])
@@ -263,6 +281,18 @@ def graph_smoke(device="cpu"):
             torch.testing.assert_close(data.x_T[:, 5], torch.tensor([0., 1.]))
             torch.testing.assert_close(data.x_T[:, 1], torch.tensor([1., 0.]))
         examples.append(dict(row=row, data=data))
+    # Same upstream model must batch paired debate graphs alongside IID graphs.
+    for n in (2, 3, 5):
+        row = dict(model_ids=[f"model{i}" for i in range(n)], task="synthetic", protocol="debate",
+                   answers=["B"] * n, mean_logprobs=[0.] + [-1.] * (n - 1), target="B", correct=1,
+                   initial_answers=["A"] * n, initial_mean_logprobs=[-2.] * n, initial_target="A",
+                   communication=(np.ones((n, n)) - np.eye(n)).tolist())
+        data = make_graph(row, np.eye(n), features, np.eye(n))
+        assert not torch.equal(data.x_T, data.x_0)
+        assert (data.edge_attr_T[:, 0] == 1).all()
+        assert (data.edge_attr_0[:, 0] == 0).all()
+        assert data.x_T[0, 0].item() == 1.0
+        examples.append(dict(row=row, data=data))
     batch, bench, y = collate(examples, ["synthetic"], device)
     model = upstream().HyperHybridGNN(23, hid=8, heads=2, n_bench=1, dropout=0.0).to(device)
     model.eval()
@@ -282,7 +312,7 @@ def graph_smoke(device="cpu"):
         clone.load_state_dict(torch.load(path, weights_only=True, map_location=device))
         clone.eval()
         torch.testing.assert_close(model(batch, bench), clone(batch, bench))
-    print("Graph smoke passed: 2/3/5-node batches, IID invariants, forward/backward and checkpoint reload.")
+    print("Graph smoke passed: 2/3/5-node batches, IID and paired-debate invariants, forward/backward and checkpoint reload.")
 
 
 if __name__ == "__main__":

@@ -3,9 +3,10 @@ from pathlib import Path
 from statistics import mean, stdev
 
 METRICS = ("ece", "auarc")
-FULL_METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
-METRIC_NAMES = {"accuracy": "Acc", "ece": "ECE", "auarc": "AUARC", "auroc": "AUROC", "brier": "Brier", "nll": "NLL"}
-LOWER_IS_BETTER = {"ece", "brier", "nll"}
+FULL_METRICS = ("accuracy", "ece", "t_ece", "auarc", "auroc", "brier", "t_brier", "nll")
+METRIC_NAMES = {"accuracy": "Acc", "ece": "ECE", "t_ece": "t-ECE", "auarc": "AUARC",
+                "auroc": "AUROC", "brier": "Brier", "t_brier": "t-Brier", "nll": "NLL"}
+LOWER_IS_BETTER = {"ece", "t_ece", "brier", "t_brier", "nll"}
 DATASET_NAMES = {"csqa": "CSQA", "boolq": "BoolQ", "gsm8k": "GSM8K", "truthfulqa": "TruthfulQA", "gpqa": "GPQA"}
 
 
@@ -52,7 +53,7 @@ def render_table(values, methods, tasks, title, delta, metrics=METRICS):
     widths = [max(len(str(row[index])) for row in [headers, *rows]) for index in range(len(headers))]
     formatted = [" | ".join(value.ljust(width) for value, width in zip(row, widths)) for row in [headers, *rows]]
     formatted.insert(1, "-+-".join("-" * width for width in widths))
-    notes = [title, "Acc, ECE, AUARC, AUROC and Brier are x100; NLL is unscaled in nats.",
+    notes = [title, "Acc, ECE, t-ECE, AUARC, AUROC, Brier and t-Brier are x100; NLL is unscaled in nats.",
              "Each model group has equal weight; the overall table averages groups, not size-table averages.",
              "Delta = method minus its own group's reference before averaging: negative ECE/Brier/NLL and positive Acc/AUARC/AUROC are improvements.",
              "Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.",
@@ -155,3 +156,71 @@ def write_csv(path, rows):
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+
+
+def paper_highlights(values, names, tasks, fields):
+    highlights = {}
+    macros = ("gfirst", "gsecond", "gthird")
+    for task in tasks:
+        for field in fields:
+            candidates = sorted(
+                ((name, values[name, task, field][0]) for name in names
+                 if values[name, task, field][0] is not None),
+                key=lambda item: item[1], reverse=field == "auarc",
+            )
+            rank = 0
+            previous = None
+            for name, value in candidates:
+                if previous is None or abs(value - previous) > 1e-12:
+                    rank += 1
+                    previous = value
+                if rank > len(macros):
+                    break
+                highlights[name, task, field] = macros[rank - 1]
+    return highlights
+
+
+def write_paper_table(path, rows, cells, estimator, methods, tasks):
+    sections = (
+        ("Reference", ("best_solo",)),
+        ("No learned combination weights", ("mean", "logodds_sum")),
+        ("External baseline", ("cagecal_iid_betasb", "cagecal_iid")),
+        ("Judge-based confidence", tuple(name for name in methods if name.startswith("judge:"))),
+        ("Learned per-model weights", ("kahn", "kahn_diagonal", "blp", "logistic_pool")),
+    )
+    fields = ("brier", "t_brier", "auarc")
+    values = aggregate(rows, cells, estimator, None, methods, tasks, False, fields, spread=True)
+    names = [name for _, section in sections for name in section if name in methods]
+    highlights = paper_highlights(values, names, tasks, fields)
+    width = 1 + len(tasks) * len(fields)
+    lines = [r"\begin{table*}[t]", r"\centering",
+             rf"\caption{{Voting confidence quality with {escape(estimator)} scores. Absolute metrics are averaged across 15 model groups per dataset; entries are mean $\pm$ sample SD. Lower Brier and t-Brier, and higher AUARC, are better.}}",
+             rf"\label{{tab:voting-{escape(estimator)}-absolute}}",
+             r"\setlength{\tabcolsep}{2.6pt}", r"\resizebox{\textwidth}{!}{%",
+             r"\begin{tabular}{@{}l" + "r" * (width - 1) + r"@{}}", r"\toprule",
+             " & " + " & ".join(rf"\multicolumn{{3}}{{c}}{{{escape(DATASET_NAMES.get(task, task))}}}" for task in tasks) + r" \\",
+             "Method & " + " & ".join(("Brier $\\downarrow$", "t-Brier $\\downarrow$", "AUARC $\\uparrow$") * len(tasks)) + r" \\",
+             r"\midrule"]
+    for section, names in sections:
+        selected = [name for name in names if name in methods]
+        if not selected:
+            continue
+        lines.append(rf"\multicolumn{{{width}}}{{l}}{{\textbf{{{section}}}}}\\")
+        for name in selected:
+            cells_out = []
+            for task in tasks:
+                for field in fields:
+                    value, _, _, deviation = values[name, task, field]
+                    cell = "--" if value is None else f"{value:.3f}" + (
+                        rf" {{\scriptsize $\pm$ {deviation:.3f}}}" if deviation is not None else ""
+                    )
+                    macro = highlights.get((name, task, field))
+                    cells_out.append(rf"\{macro}{{{cell}}}" if macro else cell)
+            lines.append(escape(methods[name]) + " & " + " & ".join(cells_out) + r" \\")
+        lines.append(r"\midrule")
+    lines[-1] = r"\bottomrule"
+    lines += [r"\end{tabular}%", "}",
+              r"\vspace{2pt}",
+              r"\parbox{\textwidth}{\footnotesize t-Brier uses one output temperature fitted by NLL on the fitting split and held fixed on evaluation. AUARC uses the original scores. CAGE-CAL t-Brier is unavailable because its saved predictions contain only evaluation questions.}",
+              r"\end{table*}"]
+    path.write_text("\n".join(lines) + "\n")

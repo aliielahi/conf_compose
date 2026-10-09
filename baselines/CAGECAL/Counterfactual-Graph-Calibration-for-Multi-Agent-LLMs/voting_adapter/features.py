@@ -26,7 +26,7 @@ def pearson_matrix(correctness, n_agents):
     return _pearson_W(x)
 
 
-def query_matrices(rows, question_embeddings, k=20):
+def query_matrices(rows, question_embeddings, k=20, correctness_key="member_correct"):
     """Neighbors from this panel's training questions, excluding query itself.
 
     Validation/evaluation labels are never read by this function. Every W row
@@ -41,7 +41,7 @@ def query_matrices(rows, question_embeddings, k=20):
         if len(train) < 2:
             raise ValueError(f"{task}/{models}: fewer than two usable training questions for W")
         ref = np.stack([question_embeddings[(task, r["id"])] for r in train])
-        labels = np.asarray([r["member_correct"] for r in train], dtype=np.float32)
+        labels = np.asarray([r[correctness_key] for r in train], dtype=np.float32)
         for row in group:
             similarity = ref @ question_embeddings[(task, row["id"])]
             order = np.argsort(-similarity, kind="stable")

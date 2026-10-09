@@ -1,0 +1,17 @@
+# Post-debate consistency report
+
+Run the composition sweep after all round-one consistency samples are saved:
+
+```bash
+python runs/experiment05-debate_comp/run.py --estimators cons --require-complete
+python runs/experiment05-debate_comp/check.py --run results/debate_composition/run_<id>
+python paper_results/codes/debate_protocol/run.py --run results/debate_composition/run_<id>
+```
+
+The report writes to `paper_results/results/debate_protocol/run_<id>/cons/`. `atomic.csv` has one row per dataset, model group, and method. Each table has a plain-text and LaTeX version. `all_*` averages over the model groups within each dataset; `size_2_*` through `size_6_*` restrict to a group size. Absolute tables show metric values, `*_delta` tables compare with one stream scoring the same selected answer, and `*_vs_mean` tables compare with arithmetic pooling. The full tables include accuracy, ECE, t-ECE, AUARC, AUROC, Brier, t-Brier, and NLL. Coverage and exploratory dataset-block sign tests are saved separately.
+
+The reference stream is the group member selected by fitting-split initial-answer accuracy; it scores the same final answer as every pooling method. All methods in a group use the same evaluation questions and answer. Accuracy uses all evaluation questions. Deltas are calculated per group before averaging, and the reported `±` is the sample SD across groups. The report does not compare initial answers with post-debate answers or change answer selection.
+
+The t metrics use one output temperature fitted by NLL on fitting questions. The temperature is applied only to evaluation probabilities; raw AUARC and AUROC are unchanged. The paper table shows absolute Brier, t-Brier and AUARC means across the groups.
+
+Only round-one consistency results are included. The old voting judge and CAGE-CAL scores are not post-debate baselines and are not imported. The sequence-probability report can be added after its candidate scoring is complete.
