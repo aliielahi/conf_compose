@@ -16,6 +16,8 @@ from .pooling import FIXED_RULES, fit_methods, pool_methods
 
 METRICS = ('accuracy', 'ece', 'auarc', 'auroc', 'brier', 'nll')
 SAMPLE_KEY = 'consistency_t0.7'
+# Pools every member's round-0 and post-debate confidence in the final answer: 2N streams instead of N.
+BOTH_ROUNDS = 'both_rounds:'
 
 
 @dataclass(frozen=True)
@@ -77,7 +79,8 @@ def sequence_score(task, record, target, config):
     return sum(value for value, match in zip(weights, selected) if match) / sum(weights)
 
 
-def score_question(task, models, records, question, round_index, estimator, config):
+def score_question(task, models, records, question, round_index, estimator, config, toward=None):
+    """`toward` scores this round's streams against another round's answer instead of their own majority."""
     streams = [Stream(f'{question}:r{round_index}:a{agent}', agent, round_index, f'vllm/{model}',
                       records[model][question]['prediction'],
                       (records[model][question].get('sampled_answers') or {}).get(SAMPLE_KEY, []))
@@ -113,9 +116,10 @@ def score_question(task, models, records, question, round_index, estimator, conf
             return None
         return supports[stream.stream_id].binary(answer)
 
+    goal = target if toward is None else toward
     return {'target': target, 'selection_reason': reason,
             'own': [confidence(model, stream, stream.answer) for model, stream in zip(models, streams)],
-            'shared': [confidence(model, stream, target) for model, stream in zip(models, streams)],
+            'shared': [confidence(model, stream, goal) for model, stream in zip(models, streams)],
             'valid_samples': [supports[s.stream_id].valid for s in streams],
             'requested_samples': [min(len(s.samples), config.samples) for s in streams]}
 
@@ -142,7 +146,11 @@ def evaluate_cell(cell, estimator, config):
         current = score_question(task, models, cell.current, question, cell.round, estimator, config)
         gold = cell.initial[models[0]][question]['gold']
         correct = current['target'] is not None and task.equivalent(current['target'], gold)
+        initial_on_final = (score_question(task, models, cell.initial, question, 0, estimator, config,
+                                           toward=current['target'])['shared']
+                            if current['target'] is not None else [None] * len(models))
         observations[question] = {'id': question, 'gold': gold, 'initial': initial, 'post_debate': current,
+                                  'initial_on_final': initial_on_final,
                                   'correct': bool(correct), 'scored': current['target'] is not None
                                   and all(value is not None for value in current['shared'])}
     fit_scored = [q for q in fitting if observations[q]['scored']]
@@ -150,6 +158,17 @@ def evaluate_cell(cell, estimator, config):
     fitted = fit_methods(matrix, [observations[q]['correct'] for q in fit_scored],
                          ablations=config.ablations, logistic_l2=config.logistic_l2)
     rules = (*FIXED_RULES, *fitted)
+
+    def both_rounds(question):
+        """Post-debate then round-0 confidences in the final answer, or None if any stream is missing."""
+        values = [*observations[question]['post_debate']['shared'], *observations[question]['initial_on_final']]
+        return values if observations[question]['scored'] and all(v is not None for v in values) else None
+
+    fit_both = [q for q in fitting if both_rounds(q) is not None]
+    fitted_both = fit_methods(np.asarray([both_rounds(q) for q in fit_both], dtype=float).reshape(-1, 2 * len(models)),
+                              [observations[q]['correct'] for q in fit_both],
+                              ablations=config.ablations, logistic_l2=config.logistic_l2)
+    rules_both = tuple(BOTH_ROUNDS + rule for rule in (*FIXED_RULES, *fitted_both))
     fitting_accuracy = {model: sum(bool(cell.initial[model][q]['correct']) for q in fitting) / len(fitting) for model in models}
     reference_model = max(models, key=fitting_accuracy.get)
     reference_index = models.index(reference_model)
@@ -163,6 +182,10 @@ def evaluate_cell(cell, estimator, config):
         if observation['scored']:
             shared = observation['post_debate']['shared']
             outputs = {**pool_methods(shared), **{name: fit.predict(shared) for name, fit in fitted.items()}}
+            combined = both_rounds(question)
+            if combined is not None:
+                outputs.update({BOTH_ROUNDS + name: prediction for name, prediction in pool_methods(combined).items()})
+                outputs.update({BOTH_ROUNDS + name: fit.predict(combined) for name, fit in fitted_both.items()})
             for name, prediction in outputs.items():
                 rank = prediction.ranking_score
                 if rank is None:
@@ -200,11 +223,12 @@ def evaluate_cell(cell, estimator, config):
     reference_row = next(row for row in rows if row['method'] == f'initial:{reference_model}')
     rows.insert(0, {**reference_row, 'method': 'best_solo'})
     vote_accuracy = sum(by_id[q]['correct'] for q in evaluation) / len(evaluation)
-    for rule in rules:
-        valid = [q for q in matched if by_id[q]['pooled'][rule]['confidence'] is not None]
+    for rule in (*rules, *rules_both):
+        valid = [q for q in matched if (by_id[q]['pooled'].get(rule) or {}).get('confidence') is not None]
+        fit = fitted_both.get(rule[len(BOTH_ROUNDS):]) if rule.startswith(BOTH_ROUNDS) else fitted.get(rule)
         add_method(rule, [by_id[q]['pooled'][rule]['confidence'] for q in valid],
                    [by_id[q]['correct'] for q in valid], [by_id[q]['pooled'][rule]['ranking'] for q in valid],
-                   fitted[rule].status if rule in fitted else 'fixed', vote_accuracy)
+                   fit.status if fit is not None else 'fixed', vote_accuracy)
     atomic = {**base, 'n_total': len(cell.ids), 'n_fit_questions': len(fitting), 'n_fit_scored': len(fit_scored),
               'n_fit_errors': sum(not by_id[q]['correct'] for q in fit_scored),
               'fit_ids_hash': id_digest(fitting), 'eval_ids_hash': id_digest(evaluation),
@@ -217,12 +241,15 @@ def evaluate_cell(cell, estimator, config):
     for stage, prefix in (('initial', 'initial_single'), ('post_debate', 'single')):
         for metric in METRICS:
             atomic[f'{prefix}_{metric}'] = json.dumps([next(r for r in rows if r['method'] == f'{stage}:{m}')[metric] for m in models])
+    atomic['n_fit_scored_both_rounds'] = len(fit_both)
     for row in rows:
-        if row['method'] in rules:
+        if row['method'] in (*rules, *rules_both):
             for metric in (*METRICS, 'coverage', 'status'):
                 atomic[f'{row["method"]}_{metric}'] = row[metric]
     for name, fit in fitted.items():
         atomic[f'{name}_parameters'] = json.dumps(asdict(fit), sort_keys=True)
+    for name, fit in fitted_both.items():
+        atomic[f'{BOTH_ROUNDS}{name}_parameters'] = json.dumps(asdict(fit), sort_keys=True)
     audit = {**base, 'config': asdict(config), 'fit_ids': fitting, 'eval_ids': evaluation,
              'fit_scored_ids': fit_scored, 'matched_ids': matched, 'fitting_accuracy': fitting_accuracy,
              'selection_reasons': dict(Counter(by_id[q]['post_debate']['selection_reason'] for q in evaluation)),
@@ -234,4 +261,5 @@ def evaluate_cell(cell, estimator, config):
              'reference': 'highest initial solo accuracy on fitting questions; order breaks ties',
              'pool_accuracy_all': vote_accuracy, 'numerical_precision': 12}
     return {'atomic': atomic, 'metrics': rows, 'predictions': predictions,
-            'fits': {name: asdict(fit) for name, fit in fitted.items()}, 'audit': audit}
+            'fits': {**{name: asdict(fit) for name, fit in fitted.items()},
+                     **{BOTH_ROUNDS + name: asdict(fit) for name, fit in fitted_both.items()}}, 'audit': audit}

@@ -137,7 +137,7 @@ def test_full_metrics_include_unscaled_nll_and_accuracy_delta():
     values = aggregate([row], [cell], "cons", None, ["mean"], ["csqa"], True, FULL_METRICS)
     text, latex = render_table(values, {"mean": "Mean"}, ["csqa"], "test", True, FULL_METRICS)
     assert "+0.120" in text and "+12.00" in text
-    assert "multicolumn{8}" in latex and "AUROC" in latex and "Acc" in latex
+    assert f"multicolumn{{{len(FULL_METRICS)}}}" in latex and "AUROC" in latex and "p-ECE" in latex
     metrics = metric_values([0.2, 0.8], [0, 1])
     assert metrics["accuracy"] == 0.5 and metrics["auroc"] == 1
     assert metrics["brier"] == pytest.approx(0.04)

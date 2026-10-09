@@ -11,12 +11,12 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'src'))
 
 from conf_compose.utils import metrics
-from conf_compose.utils.calibration import fit_temperature, temperature_scale
+from conf_compose.utils.calibration import PlattCalibrator, fit_temperature, temperature_scale
 
 TASKS = ('csqa', 'boolq', 'gsm8k', 'truthfulqa', 'gpqa')
 SIZES = (2, 3, 4, 5, 6)
 RAW_FIELDS = ('accuracy', 'ece', 'auarc', 'auroc', 'brier', 'nll')
-FIELDS = (*RAW_FIELDS, 't_brier', 't_ece')
+FIELDS = (*RAW_FIELDS, 't_brier', 't_ece', 'p_brier', 'p_ece')
 REPORT_FIELDS = (*FIELDS, 'answer_matched_auarc')
 RULES = {
     'reference_stream_target': 'Single stream, same answer',
@@ -31,13 +31,17 @@ RULES = {
     'blp_equal': 'Equal-weight BLP',
     'kahn_diagonal': 'Kahn (diagonal covariance)',
 }
+# The same rules over 2N streams: every member's round-0 and post-debate confidence in the final answer.
+BOTH_ROUNDS = 'both_rounds:'
+RULES.update({BOTH_ROUNDS + name: f'{label} (both rounds)' for name, label in list(RULES.items())
+              if name != 'reference_stream_target'})
 CAGE_RUN = ROOT / 'baselines/results/debate_adapter/71259088b2f0e984'
 CAGE_RULES = {'cagecal_debate': 'CAGE-CAL (paired debate)',
               'cagecal_debate_betasb': 'CAGE-CAL (paired debate + BetaSB)'}
 REPORT_RULES = {**RULES, **CAGE_RULES}
-LOWER = {'ece', 't_ece', 'brier', 't_brier', 'nll'}
-NAMES = {'accuracy': 'Acc', 'ece': 'ECE', 't_ece': 't-ECE', 'auarc': 'AUARC', 'auroc': 'AUROC',
-         'brier': 'Brier', 't_brier': 't-Brier', 'nll': 'NLL',
+LOWER = {'ece', 't_ece', 'p_ece', 'brier', 't_brier', 'p_brier', 'nll'}
+NAMES = {'accuracy': 'Acc', 'ece': 'ECE', 't_ece': 't-ECE', 'p_ece': 'p-ECE', 'auarc': 'AUARC', 'auroc': 'AUROC',
+         'brier': 'Brier', 't_brier': 't-Brier', 'p_brier': 'p-Brier', 'nll': 'NLL',
          'answer_matched_auarc': 'AUARC (same answer)'}
 
 
@@ -119,12 +123,14 @@ def temperature_metrics(records, audit, method):
     evaluation = [(confidence(question), float(records[question]['correct'])) for question in audit['matched_ids']]
     evaluation = [(value, label) for value, label in evaluation if value is not None]
     if not fitting or not evaluation:
-        return {'t_brier': None, 't_ece': None}, None, len(evaluation)
+        return {'t_brier': None, 't_ece': None, 'p_brier': None, 'p_ece': None}, None, len(evaluation)
     temperature = fit_temperature(*zip(*fitting))
-    probabilities = temperature_scale([value for value, _ in evaluation], temperature)
+    values = [value for value, _ in evaluation]
     labels = [label for _, label in evaluation]
-    return {'t_brier': metrics.brier(probabilities, labels),
-            't_ece': metrics.ece(probabilities, labels)}, temperature, len(evaluation)
+    probabilities = temperature_scale(values, temperature)
+    platt = PlattCalibrator().fit(*zip(*fitting)).predict(values)
+    return {'t_brier': metrics.brier(probabilities, labels), 't_ece': metrics.ece(probabilities, labels),
+            'p_brier': metrics.brier(platt, labels), 'p_ece': metrics.ece(platt, labels)}, temperature, len(evaluation)
 
 
 def prepare(run, reference_mode='fit_accuracy'):
@@ -185,6 +191,7 @@ def prepare(run, reference_mode='fit_accuracy'):
         audits.append({'task': task, 'models': models, 'round': round_index, 'n_models': audit['n_models'],
                        'n_evaluation': audit['n_evaluation'], 'n_matched': audit['n_matched'],
                        'matched_ids': audit['matched_ids'],
+                       'selected_targets': {question: predictions[question]['post_debate']['target'] for question in audit['matched_ids']},
                        'reference_model': audit['reference_model'], 'reference_mode': audit['reference_mode'],
                        'confidence': 'consistency',
                        'excluded': audit['excluded'], 'selection_reasons': audit['selection_reasons']})
@@ -200,7 +207,7 @@ def prepare(run, reference_mode='fit_accuracy'):
             if parsed['n_scored'] > parsed['n_matched']:
                 raise ValueError(f'method scored more than common mask: {path}')
             for field in FIELDS:
-                value = (temperatures[row['method']][0][field] if field.startswith('t_') else valid(row[field]))
+                value = (temperatures[row['method']][0][field] if field.startswith(('t_', 'p_')) else valid(row[field]))
                 reference_value = valid(reference[field])
                 if field in RAW_FIELDS and row is not reference and valid(row['reference_' + field]) != valid(source_reference[field]):
                     raise ValueError(f'reference differs across methods: {path}/{row["method"]}/{field}')
@@ -217,6 +224,7 @@ def prepare(run, reference_mode='fit_accuracy'):
 
 def append_cagecal(rows, audits, directory):
     directory = Path(directory)
+    baseline_manifest = json.loads((directory / 'manifest.json').read_text())
     source_audits = json.loads((directory / 'paper_tables/audit.json').read_text())
     source_cells = {(cell['task'], cell['models'], int(cell.get('round', 1))): cell for cell in source_audits}
     with (directory / 'paper_tables/cagecal_metrics.csv').open(newline='') as handle:
@@ -246,11 +254,16 @@ def append_cagecal(rows, audits, directory):
             raise ValueError(f'CAGE-CAL debate question mask differs: {identity}')
         selected = [predictions[(audit['task'], audit['models'], question)] for question in audit['matched_ids']]
         labels = [float(item['correct']) for item in selected]
+        for item in selected:
+            if item['target'] != audit['selected_targets'][item['id']]:
+                raise ValueError(f'CAGE-CAL debate target differs: {identity}/{item["id"]}')
         if abs(mean(labels) - source['vote_accuracy']) > 1e-12:
             raise ValueError(f'CAGE-CAL debate labels differ: {identity}')
         val = [item for (task, models, _), item in validation.items()
                if (task, models) == identity[:2]]
-        if not val or set(item['id'] for item in val) & set(audit['matched_ids']):
+        split = baseline_manifest['splits'][audit['task']]
+        validation_ids = {item['id'] for item in val}
+        if not val or not validation_ids <= set(split['validation']) or validation_ids & set(split['evaluation']):
             raise ValueError(f'CAGE-CAL validation missing or overlapping: {identity}')
         for method, field in (('cagecal_debate', 'raw'), ('cagecal_debate_betasb', 'betasb')):
             export = source_metrics[audit['task'], audit['models'], method]
@@ -264,7 +277,7 @@ def append_cagecal(rows, audits, directory):
                 if actual is not None and expected is not None and abs(actual - expected) > 1e-9:
                     raise ValueError(f'CAGE-CAL debate {metric} differs: {identity}/{method}')
             temperature = None
-            calibrated = {'t_brier': None, 't_ece': None}
+            calibrated = {'t_brier': None, 't_ece': None, 'p_brier': None, 'p_ece': None}
             if method == 'cagecal_debate':
                 temperature = (fit_temperature([item['raw'] for item in val], [item['correct'] for item in val])
                                if len({item['correct'] for item in val}) > 1 else 1.0)
@@ -277,6 +290,9 @@ def append_cagecal(rows, audits, directory):
                 for metric, value in calibrated.items():
                     if abs(value - float(export[metric])) > 1e-9:
                         raise ValueError(f'CAGE-CAL debate {metric} differs: {identity}')
+                platt = PlattCalibrator().fit([item['raw'] for item in val],
+                                              [item['correct'] for item in val]).predict(probabilities)
+                calibrated.update(p_brier=float(metrics.brier(platt, labels)), p_ece=float(metrics.ece(platt, labels)))
             row = dict(references[identity], method=method, status='trained', output_temperature=temperature)
             for metric, value in {**observed, **calibrated}.items():
                 if metric == 'accuracy':
@@ -333,7 +349,7 @@ def table(rows, audits, tasks, size, fields, comparison):
              'ECE, t-ECE, AUARC, AUROC, Acc, Brier and t-Brier are x100; NLL is unscaled (nats).',
              'Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements.',
              '± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.',
-             'Every method scores the same selected debate answer on the same questions.', '']
+             'Every method scores the same selected debate answer on the same questions; in debate the two AUARC columns coincide.', '']
     columns = [(task, field) for task in tasks for field in fields]
     headers = ['Method'] + [f'{task.upper()} {field.upper()}' for task, field in columns]
     grid = [[REPORT_RULES[method]] + [display(*summary(rows, audits, method, task, size, field, comparison)[:2], field, comparison is not None)
@@ -390,12 +406,12 @@ def sign_test(rows, audits, tasks):
 def paper_highlights(rows, audits, sections, tasks, fields):
     highlights = {}
     macros = ('gfirst', 'gsecond', 'gthird')
-    names = [name for _, section in sections for name in section]
+    names = [name for _, section in sections for name in section if name != "reference_stream_target"]
     for task in tasks:
         for field in fields:
             candidates = []
             for name in names:
-                value = summary(rows, audits, name, task, None, field)[0]
+                value = summary(rows, audits, name, task, None, field, "target")[0]
                 if value is not None:
                     candidates.append((name, value))
             candidates.sort(key=lambda item: item[1], reverse=field in ('auarc', 'answer_matched_auarc', 'delta_answer_matched_auarc'))
@@ -413,23 +429,31 @@ def paper_highlights(rows, audits, sections, tasks, fields):
     return highlights
 
 
-def paper_table(rows, audits, tasks):
+CALIBRATIONS = {'t': ('temperature', 'one fitted temperature'),
+                'p': ('Platt', 'Platt scaling, a fitted slope and intercept on the logit')}
+
+
+def paper_table(rows, audits, tasks, calibration='t'):
+    """`calibration` is 't' (temperature) or 'p' (Platt); everything else in the table is identical."""
+    learned = ('kahn', 'kahn_diagonal', 'blp', 'logistic_pool')
     sections = (
         ('Reference', ('reference_stream_target',)),
         ('No learned combination weights', ('mean', 'logodds_sum')),
-        ('External baseline', tuple(CAGE_RULES)),
-        ('Learned per-model weights', ('kahn', 'kahn_diagonal', 'blp', 'logistic_pool')),
+        ('External baseline', ('cagecal_debate',)),
+        ('Learned per-model weights', learned),
+        ('Pooled across both rounds', tuple(BOTH_ROUNDS + name for name in ('mean', 'logodds_sum', *learned))),
     )
-    fields = ('t_ece', 't_brier', 'auarc', 'delta_answer_matched_auarc')
+    fields = (f'{calibration}_ece', f'{calibration}_brier', 'auarc', 'answer_matched_auarc')
+    name, description = CALIBRATIONS[calibration]
     highlights = paper_highlights(rows, audits, sections, tasks, fields)
     width = 1 + len(tasks) * len(fields)
     lines = [r'\begin{table*}[t]', r'\centering',
-             r'\caption{Confidence quality after one debate round. Absolute metrics are averaged across available model groups (15 per dataset, except one zero-coverage logistic-pooling group on BoolQ); entries are mean $\pm$ sample SD. All methods score the same selected answer.}',
-             r'\label{tab:debate-consistency-absolute}',
+             r'\caption{Confidence quality after one debate round. Entries are mean $\pm$ sample SD of group-level method-minus-reference differences, in points ($\times 100$). Differences are computed before averaging across 15 groups per dataset (14 for logistic pooling on BoolQ). Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use ' + description + r'.}',
+             r'\label{tab:debate-consistency-delta' + ('' if calibration == 't' else '-platt') + '}',
              r'\setlength{\tabcolsep}{2.6pt}', r'\resizebox{\textwidth}{!}{%',
              r'\begin{tabular}{@{}l' + 'r' * (width - 1) + r'@{}}', r'\toprule',
              ' & ' + ' & '.join(rf'\multicolumn{{4}}{{c}}{{{escape(task.upper())}}}' for task in tasks) + r' \\',
-             'Method & ' + ' & '.join(('t-ECE $\\downarrow$', 't-Brier $\\downarrow$', 'AUARC $\\uparrow$', '$\\Delta$AUARC (same answer) $\\uparrow$') * len(tasks)) + r' \\',
+             'Method & ' + ' & '.join((f'$\\Delta${calibration}-ECE $\\downarrow$', f'$\\Delta${calibration}-Brier $\\downarrow$', '$\\Delta$AUARC $\\uparrow$', '$\\Delta$AUARC (same answer) $\\uparrow$') * len(tasks)) + r' \\',
              r'\midrule']
     for section, methods in sections:
         lines.append(rf'\multicolumn{{{width}}}{{l}}{{\textbf{{{section}}}}}\\')
@@ -437,17 +461,19 @@ def paper_table(rows, audits, tasks):
             cells = []
             for task in tasks:
                 for field in fields:
-                    value, deviation, _, _ = summary(rows, audits, method, task, None, field)
-                    cell = '--' if value is None else f'{value:.3f}' + (
-                        rf' {{\scriptsize $\pm$ {deviation:.3f}}}' if deviation is not None else ''
-                    )
+                    value, deviation, _, _ = summary(rows, audits, method, task, None, field, "target")
+                    cell = display(value, deviation, field, True)
+                    if " ± " in cell:
+                        average, spread = cell.split(" ± ")
+                        cell = average + r" {\scriptsize $\pm$ " + spread + "}"
                     macro = highlights.get((method, task, field))
                     cells.append(rf'\{macro}{{{cell}}}' if macro else cell)
-            lines.append(escape(REPORT_RULES[method]) + ' & ' + ' & '.join(cells) + r' \\')
+            label = 'Reference (fitting accuracy)' if method == 'reference_stream_target' else REPORT_RULES[method]
+            lines.append(escape(label) + ' & ' + ' & '.join(cells) + r' \\')
         lines.append(r'\midrule')
     lines[-1] = r'\bottomrule'
     lines += [r'\end{tabular}%', '}', r'\vspace{2pt}',
-              r'\parbox{\textwidth}{\footnotesize t-ECE and t-Brier use a validation-fitted output temperature on raw scores. AUARC uses original rankings; $\Delta$AUARC compares with one model scoring the same final answer. CAGE-CAL BetaSB has no additional temperature fit.}',
+              r'\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split initial-answer accuracy, with panel-order ties. All methods and the reference score the same final debate answer, so the two AUARC delta columns coincide. ' + name.capitalize() + r' calibration is fitted on fitting data (CAGE-CAL: its internal validation); AUARC uses original rankings. Both-rounds rows pool every member\'s round-0 and post-debate confidence in the final answer, the inputs CAGE-CAL also receives. Reference deltas are zero by definition. The BetaSB variant remains in detailed results.}',
               r'\end{table*}']
     return '\n'.join(lines) + '\n'
 
@@ -476,7 +502,9 @@ def run(args):
                                             f'{summary(rows, audits, method, task, size, "ece")[3]}' for task in tasks))
         (output / f'{prefix}_coverage.txt').write_text('\n'.join(coverage) + '\n')
     if args.out.resolve() == (ROOT / 'paper_results/results/debate_protocol').resolve() and args.reference == 'fit_accuracy':
-        (ROOT / 'paper_results/z_paper_tables/debate_consistency.tex').write_text(paper_table(rows, audits, tasks))
+        for calibration, suffix in (('t', ''), ('p', '_platt')):
+            (ROOT / f'paper_results/z_paper_tables/debate_consistency{suffix}.tex').write_text(
+                paper_table(rows, audits, tasks, calibration))
     provenance = {'source_run': str(args.run.resolve()), 'source_run_id': source['run_id'],
                   'source_manifest_sha256': digest(args.run / 'manifest.json'),
                   'source_metrics_sha256': digest(args.run / 'metrics.csv'),
@@ -487,6 +515,7 @@ def run(args):
                   'significance': 'exploratory one-sided dataset-block sign tests with joint Holm correction',
                   'accuracy': 'all evaluation questions; confidence metrics use each group common matched subset'}
     provenance['temperature_calibration'] = 'one output temperature fitted by NLL on original fitting questions; AUARC unchanged'
+    provenance['platt_calibration'] = 'Platt slope and intercept on the logit, fitted on the same fitting questions; AUARC unchanged'
     (output / 'manifest.json').write_text(json.dumps(provenance, indent=2) + '\n')
     print(f'Wrote {len(rows)} method/group rows across {len(audits)} groups to {output}')
 

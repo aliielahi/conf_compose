@@ -3,7 +3,7 @@
   "source_run_id": "618a3c11ea4498e0",
   "source_manifest_sha256": "1a6a310ed78cd68c650a604e69de32e10a7ca90864a418012a0987f7f943a3a3",
   "source_metrics_sha256": "44ceff7d70b95b692314e1ef694f9e303387807a1b395d4850e23383d21a07b2",
-  "report_code_sha256": "4b4597e83a71fd1000f6be39bcd2d4088ac8af1412a8be33632d51d8641222d1",
+  "report_code_sha256": "d81397841e5f9581e3c1df29e1333fc553dca79b3adaf03b848ba2adf6526dff",
   "tasks": [
     "csqa",
     "boolq",
@@ -32,5 +32,21 @@
   },
   "significance": "exploratory one-sided dataset-block sign tests with joint Holm correction",
   "accuracy": "all evaluation questions; confidence metrics use each group common matched subset",
-  "temperature_calibration": "one output temperature fitted by NLL on original fitting questions; AUARC unchanged"
+  "temperature_calibration": "one output temperature fitted by NLL on original fitting questions; AUARC unchanged",
+  "paper_table_render": {
+    "statistic": "mean and sample SD of per-group method-minus-reference deltas",
+    "units": "points (x100)",
+    "metrics": [
+      "t_ece",
+      "t_brier",
+      "auarc",
+      "answer_matched_auarc"
+    ],
+    "code": "paper_results/codes/debate_protocol/run.py",
+    "code_sha256": "b50409df201fc0fc6e0ed3cd9967b7cb5eab564159b32dc469eb9e6beb2e0f4b",
+    "files": {
+      "debate_consistency.tex": "d3d58f3af26b467c8626e26a0b64f4b370be74d8ee9d14d58720d20cd60d3026"
+    },
+    "cagecal": "raw-score row with fitted output temperature; BetaSB retained in detailed reports"
+  }
 }

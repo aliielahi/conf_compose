@@ -24,4 +24,5 @@ Judge g3-27i: reasoning (approx.)               | 80.67    | 88.39     | 94.50  
 Judge g3-27i: reasoning + confidence (approx.)  | 80.67    | 88.39     | 94.50     | 75.01          | 45.36   
 Judge l32-3bi: reasoning (approx.)              | 80.67    | 88.39     | 94.50     | 75.01          | 45.36   
 Judge l32-3bi: reasoning + confidence (approx.) | 80.67    | 88.39     | 94.50     | 75.01          | 45.36   
+CAGE-CAL (IID)                                  | 80.67    | 88.39     | 94.50     | 75.01          | 45.36   
 CAGE-CAL (IID + BetaSB)                         | 80.67    | 88.39     | 94.50     | 75.01          | 45.36   

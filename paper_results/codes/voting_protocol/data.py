@@ -11,11 +11,11 @@ import numpy as np
 from conf_compose.composition.pooling import FittedBLP, FittedPool, pool_methods
 from conf_compose.constants import ROOT
 from conf_compose.data import Example, get_task
-from conf_compose.utils.calibration import fit_temperature, temperature_scale
+from conf_compose.utils.calibration import PlattCalibrator, fit_temperature, temperature_scale
 from conf_compose.utils.metrics import auarc, auroc, brier, ece, nll
 
 METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
-REPORT_METRICS = (*METRICS, "t_brier", "t_ece")
+REPORT_METRICS = (*METRICS, "t_brier", "t_ece", "p_brier", "p_ece")
 LOWER_IS_BETTER = {"ece", "brier", "nll"}
 METHODS = {
     "mean": "Arithmetic mean",
@@ -118,6 +118,13 @@ def rank_value(prediction):
     if prediction.ranking_score is not None:
         return prediction.ranking_score
     return prediction.logit if prediction.logit is not None else prediction.score
+
+
+def platt_scale(fit_scores, fit_labels, scores):
+    """Platt slope and intercept fitted on the fitting scores, applied to the evaluation scores."""
+    if not fit_scores or not scores or len(set(fit_labels)) < 2:
+        return None
+    return PlattCalibrator().fit(fit_scores, fit_labels).predict(scores)
 
 
 def valid_probability(value):
@@ -382,10 +389,15 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
     solo_t = []
     for index, temperature in enumerate(solo_temperatures):
         scaled = temperature_scale(solo[index], temperature) if temperature is not None else None
+        platt = platt_scale(fitting_scores[index], fitting_labels[index], solo[index])
         solo_t.append({"t_brier": float(brier(scaled, solo_labels[index])) if scaled is not None else None,
-                       "t_ece": float(ece(scaled, solo_labels[index])) if scaled is not None else None})
+                       "t_ece": float(ece(scaled, solo_labels[index])) if scaled is not None else None,
+                       "p_brier": float(brier(platt, solo_labels[index])) if platt is not None else None,
+                       "p_ece": float(ece(platt, solo_labels[index])) if platt is not None else None})
     baseline["t_brier"] = solo_t[indices["brier"]]["t_brier"]
     baseline["t_ece"] = solo_t[indices["ece"]]["t_ece"]
+    baseline["p_brier"] = solo_t[indices["brier"]]["p_brier"]
+    baseline["p_ece"] = solo_t[indices["ece"]]["p_ece"]
     metadata["output_temperatures"] = temperatures
     metadata["solo_output_temperatures"] = dict(zip(group, solo_temperatures))
     metadata["reference_models"] = {metric: group[indices[metric]] for metric in METRICS}
@@ -399,6 +411,9 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
             scaled = temperature_scale(values[method], temperature) if temperature is not None else None
             scores["t_brier"] = float(brier(scaled, labels)) if scaled is not None else None
             scores["t_ece"] = float(ece(scaled, labels)) if scaled is not None else None
+            platt = platt_scale(fit_values[method], fit_labels[method], values[method])
+            scores["p_brier"] = float(brier(platt, labels)) if platt is not None else None
+            scores["p_ece"] = float(ece(platt, labels)) if platt is not None else None
         entry = {key: metadata[key] for key in ("task", "estimator", "models", "n_models", "n_matched", "coverage", "reference_mode")}
         entry.update(method=method, tie_break=args.tie_break, tie_seed=args.tie_seed,
                      output_temperature=(solo_temperatures[indices["brier"]] if method == "best_solo"
@@ -410,7 +425,7 @@ def process_cell(row, sources, judge_index, judges, methods, reference, judge_po
             entry[f"reference_{metric}"] = baseline[metric]
             entry[f"delta_{metric}"] = (scores[metric] - baseline[metric]
                                          if scores[metric] is not None and baseline[metric] is not None else None)
-            reference_metric = metric[2:] if metric.startswith("t_") else metric
+            reference_metric = metric[2:] if metric.startswith(("t_", "p_")) else metric
             entry[f"reference_{metric}_model"] = group[indices[reference_metric]]
             entry[f"reference_{metric}_accuracy"] = solo_accuracy[indices[reference_metric]]
         entry["answer_matched_auarc"] = matched_auarc if method == "best_solo" else scores["auarc"]

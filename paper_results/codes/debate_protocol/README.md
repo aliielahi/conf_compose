@@ -12,9 +12,9 @@ The report writes to `paper_results/results/debate_protocol/run_<id>/cons/`. `at
 
 The reference stream is the group member selected by fitting-split initial-answer accuracy; it scores the same final answer as every pooling method. All methods in a group use the same evaluation questions and answer. Accuracy uses all evaluation questions. Deltas are calculated per group before averaging, and the reported `±` is the sample SD across groups. The report does not compare initial answers with post-debate answers or change answer selection.
 
-The t metrics use one output temperature fitted by NLL on fitting questions. The temperature is applied only to evaluation probabilities; raw AUARC and AUROC are unchanged. The paper table shows absolute Brier, t-Brier and AUARC means across the groups.
+The t metrics use one output temperature fitted by NLL on fitting questions. The temperature is applied only to evaluation probabilities; raw AUARC and AUROC are unchanged. The paper table shows mean within-group deltas for t-ECE, t-Brier, AUARC, and answer-matched AUARC (all x100), with the sample SD of those deltas. The compact table keeps one CAGE-CAL row; detailed reports retain BetaSB.
 
-Only round-one consistency results are included. The old voting judge and CAGE-CAL scores are not post-debate baselines and are not imported. The sequence-probability report can be added after its candidate scoring is complete.
+Only round-one consistency results are included. The voting judge is not imported; the paired-debate CAGE-CAL scores are joined from their own audited adapter run. The sequence-probability report can be added after its candidate scoring is complete.
 
 
 The current reporter also joins the paired-debate CAGE-CAL adapter in

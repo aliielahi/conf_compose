@@ -12,4 +12,5 @@ Weighted BLP                 | 5/5        | 0.0312 | 1.0000     | 5/5          |
 Regularized logistic pooling | 4/5        | 0.1875 | 1.0000     | 5/5          | 0.0312  | 1.0000      
 Equal-weight BLP             | 5/5        | 0.0312 | 1.0000     | 5/5          | 0.0312  | 1.0000      
 Kahn (diagonal covariance)   | 3/5        | 0.5000 | 1.0000     | 5/5          | 0.0312  | 1.0000      
+CAGE-CAL (IID)               | 4/5        | 0.1875 | 1.0000     | 5/5          | 0.0312  | 1.0000      
 CAGE-CAL (IID + BetaSB)      | 4/5        | 0.1875 | 1.0000     | 5/5          | 0.0312  | 1.0000      

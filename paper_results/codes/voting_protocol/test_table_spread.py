@@ -1,7 +1,9 @@
 import unittest
+import tempfile
+from pathlib import Path
 from statistics import stdev
 
-from tables import FULL_METRICS, aggregate, display, render_table
+from tables import FULL_METRICS, aggregate, display, render_table, write_paper_table
 from conf_compose.utils.calibration import fit_temperature, temperature_scale
 from conf_compose.utils.metrics import nll
 
@@ -29,6 +31,20 @@ class DeltaSpreadTest(unittest.TestCase):
         self.assertIn('+0.150 ± 0.071', text)
         self.assertIn(r'{\scriptsize $\pm$ 7.07}', latex)
         self.assertIn('not a confidence interval', latex)
+
+    def test_paper_table_uses_group_deltas_for_every_metric(self):
+        fields = ("t_ece", "t_brier", "auarc", "answer_matched_auarc")
+        cells = [{"estimator": "cons", "task": "csqa", "n_models": 2} for _ in range(2)]
+        rows = [{**cell, "method": "mean", **dict.fromkeys(fields, absolute),
+                 **{f"delta_{field}": delta for field in fields}}
+                for cell, absolute, delta in zip(cells, (0.2, 0.8), (-0.1, 0.3))]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "table.tex"
+            write_paper_table(path, rows, cells, "cons", {"mean": "Average"}, ["csqa"])
+            text = path.read_text()
+        self.assertEqual(text.count(r"+10.00 {\scriptsize $\pm$ 28.28}"), 4)
+        self.assertNotIn("Absolute metrics", text)
+        self.assertIn(r"$\Delta$t-ECE", text)
 
     def test_missing_and_single_group(self):
         self.assertEqual(display(None, 0, 15, None, delta=True), '--')

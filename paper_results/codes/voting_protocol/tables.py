@@ -3,10 +3,14 @@ from pathlib import Path
 from statistics import mean, stdev
 
 METRICS = ("ece", "auarc")
-FULL_METRICS = ("accuracy", "ece", "t_ece", "auarc", "answer_matched_auarc", "auroc", "brier", "t_brier", "nll")
-METRIC_NAMES = {"accuracy": "Acc", "ece": "ECE", "t_ece": "t-ECE", "auarc": "AUARC",
-                "answer_matched_auarc": "AUARC (same answer)", "auroc": "AUROC", "brier": "Brier", "t_brier": "t-Brier", "nll": "NLL"}
-LOWER_IS_BETTER = {"ece", "t_ece", "brier", "t_brier", "nll"}
+FULL_METRICS = ("accuracy", "ece", "t_ece", "p_ece", "auarc", "answer_matched_auarc", "auroc", "brier", "t_brier",
+                "p_brier", "nll")
+METRIC_NAMES = {"accuracy": "Acc", "ece": "ECE", "t_ece": "t-ECE", "p_ece": "p-ECE", "auarc": "AUARC",
+                "answer_matched_auarc": "AUARC (same answer)", "auroc": "AUROC", "brier": "Brier", "t_brier": "t-Brier",
+                "p_brier": "p-Brier", "nll": "NLL"}
+LOWER_IS_BETTER = {"ece", "t_ece", "p_ece", "brier", "t_brier", "p_brier", "nll"}
+# Calibration of the paper tables: t is one fitted temperature, p is Platt (fitted slope and intercept).
+CALIBRATIONS = {"t": "one fitted output temperature", "p": "Platt scaling, a fitted slope and intercept on the logit"}
 DATASET_NAMES = {"csqa": "CSQA", "boolq": "BoolQ", "gsm8k": "GSM8K", "truthfulqa": "TruthfulQA", "gpqa": "GPQA"}
 
 
@@ -165,7 +169,7 @@ def paper_highlights(values, names, tasks, fields):
         for field in fields:
             candidates = sorted(
                 ((name, values[name, task, field][0]) for name in names
-                 if values[name, task, field][0] is not None),
+                 if name != "best_solo" and values[name, task, field][0] is not None),
                 key=lambda item: item[1], reverse=field in ("auarc", "answer_matched_auarc", "delta_answer_matched_auarc"),
             )
             rank = 0
@@ -180,26 +184,26 @@ def paper_highlights(values, names, tasks, fields):
     return highlights
 
 
-def write_paper_table(path, rows, cells, estimator, methods, tasks):
+def write_paper_table(path, rows, cells, estimator, methods, tasks, calibration="t"):
     sections = (
         ("Reference", ("best_solo",)),
         ("No learned combination weights", ("mean", "logodds_sum")),
-        ("External baseline", ("cagecal_iid_betasb", "cagecal_iid")),
+        ("External baseline", ("cagecal_iid",)), 
         ("Judge-based confidence", tuple(name for name in methods if name.startswith("judge:"))),
         ("Learned per-model weights", ("kahn", "kahn_diagonal", "blp", "logistic_pool")),
     )
-    fields = ("t_ece", "t_brier", "auarc", "delta_answer_matched_auarc")
-    values = aggregate(rows, cells, estimator, None, methods, tasks, False, fields, spread=True)
+    fields = (f"{calibration}_ece", f"{calibration}_brier", "auarc", "answer_matched_auarc")
+    values = aggregate(rows, cells, estimator, None, methods, tasks, True, fields, spread=True)
     names = [name for _, section in sections for name in section if name in methods]
     highlights = paper_highlights(values, names, tasks, fields)
     width = 1 + len(tasks) * len(fields)
     lines = [r"\begin{table*}[t]", r"\centering",
-             rf"\caption{{Voting confidence quality with {escape(estimator)} scores. Absolute metrics are averaged across 15 model groups per dataset; entries are mean $\pm$ sample SD. Lower t-ECE and t-Brier, and higher AUARC, are better.}}",
-             rf"\label{{tab:voting-{escape(estimator)}-absolute}}",
+             rf"\caption{{Voting confidence quality with {escape(estimator)} scores. Each entry is the mean $\pm$ sample SD of the 15 group-level method-minus-reference differences, in points ($\times 100$). Differences are computed within each group before averaging. Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use {CALIBRATIONS[calibration]}.}}",
+             rf"\label{{tab:voting-{escape(estimator)}-delta{'' if calibration == 't' else '-platt'}}}",
              r"\setlength{\tabcolsep}{2.6pt}", r"\resizebox{\textwidth}{!}{%",
              r"\begin{tabular}{@{}l" + "r" * (width - 1) + r"@{}}", r"\toprule",
              " & " + " & ".join(rf"\multicolumn{{4}}{{c}}{{{escape(DATASET_NAMES.get(task, task))}}}" for task in tasks) + r" \\",
-             "Method & " + " & ".join(("t-ECE $\\downarrow$", "t-Brier $\\downarrow$", "AUARC $\\uparrow$", "$\\Delta$AUARC (same answer) $\\uparrow$") * len(tasks)) + r" \\",
+             "Method & " + " & ".join((f"$\\Delta${calibration}-ECE $\\downarrow$", f"$\\Delta${calibration}-Brier $\\downarrow$", "$\\Delta$AUARC $\\uparrow$", "$\\Delta$AUARC (same answer) $\\uparrow$") * len(tasks)) + r" \\",
              r"\midrule"]
     for section, names in sections:
         selected = [name for name in names if name in methods]
@@ -210,17 +214,15 @@ def write_paper_table(path, rows, cells, estimator, methods, tasks):
             cells_out = []
             for task in tasks:
                 for field in fields:
-                    value, _, _, deviation = values[name, task, field]
-                    cell = "--" if value is None else f"{value:.3f}" + (
-                        rf" {{\scriptsize $\pm$ {deviation:.3f}}}" if deviation is not None else ""
-                    )
+                    cell = display(*values[name, task, field], delta=True, latex=True, metric=field)
                     macro = highlights.get((name, task, field))
                     cells_out.append(rf"\{macro}{{{cell}}}" if macro else cell)
-            lines.append(escape(methods[name]) + " & " + " & ".join(cells_out) + r" \\")
+            label = "Reference (fitting accuracy)" if name == "best_solo" else methods[name]
+            lines.append(escape(label) + " & " + " & ".join(cells_out) + r" \\")
         lines.append(r"\midrule")
     lines[-1] = r"\bottomrule"
     lines += [r"\end{tabular}%", "}",
               r"\vspace{2pt}",
-              r"\parbox{\textwidth}{\footnotesize t-ECE and t-Brier use one output temperature fitted by NLL on fitting data. AUARC uses original scores; $\Delta$AUARC compares with the same selected answer scored by one fitting-accuracy-selected model. CAGE-CAL BetaSB has no additional temperature fit.}",
+              r"\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split answer accuracy, with panel-order ties. Calibration and original AUARC deltas compare with its own-answer scores; same-answer AUARC deltas use that model to score the selected voting answer. Calibrators are fitted on fitting data (CAGE-CAL: its internal validation). AUARC uses original rankings. The reference row is zero by definition. Approximate judges reuse earlier scores; the BetaSB variant remains in detailed results.}",
               r"\end{table*}"]
     path.write_text("\n".join(lines) + "\n")

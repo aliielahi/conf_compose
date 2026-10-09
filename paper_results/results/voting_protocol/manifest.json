@@ -26,8 +26,8 @@
     ],
     "reference": "fit_accuracy",
     "ablations": true,
-    "cagecal_dir": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/baselines/CAGECAL/Counterfactual-Graph-Calibration-for-Multi-Agent-LLMs/results/voting_adapter/5f0d2df353f60fe6",
-    "cagecal_score": "betasb",
+    "cagecal_dir": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/baselines/results/voting_adapter/a1fc8f63af8e71c5",
+    "cagecal_score": "both",
     "no_cagecal": false,
     "significance": true
   },
@@ -36,15 +36,15 @@
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/voting_atomic/learned_panels_confidence_tie_v2/seq.csv": "d7166679770d69dc55ecdcbdc8959b8d7bfb89c98cfcd60afcd933c0723bfbe1"
   },
   "report_code": {
-    "paper_results/codes/voting_protocol/cagecal.py": "8abbacd7bc38a8af5dcaccb6f06779a691608cc1e513a9061e877ef7d6beaa3a",
-    "paper_results/codes/voting_protocol/data.py": "ce0772d880cc9c24a69807df402b2951645fd6cb49820fccbcaa32238c51b108",
-    "paper_results/codes/voting_protocol/prepare.py": "2e6d6bd0cd0e9fcfc051c0f7d077d293fd627379783968714798db9f744cc87f",
-    "paper_results/codes/voting_protocol/run.py": "710a39dbc3c5588c71a46f881de3da711eb7a5cda3eeed2ef170371f0a04dfc7",
-    "paper_results/codes/voting_protocol/significance.py": "3407768ab8e15f6710a0dc5ced5b5a8aef90d549b7892313a29c18fadccc0752",
-    "paper_results/codes/voting_protocol/tables.py": "106b0120dae27d772e983dc6d5e3e133f0f87d1caa0874b8e54804dc7dc30598",
-    "paper_results/codes/voting_protocol/test_cagecal.py": "db4e2505e2fcd5b3d4118124073e3a273d0e616448b967dc5113d29d2437ad01",
-    "paper_results/codes/voting_protocol/test_reporting.py": "7ec1bd440a00e3f5bfa2b2657c82bdac40dddd3de8d8c3111778062f2f94103b",
-    "paper_results/codes/voting_protocol/test_table_spread.py": "83fa07822b38956dd76e9c42074311069c3efbf558939507447eec31e3c4d259"
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/cagecal.py": "c4a63b3d8d58353f59d66e99446874b3c7d0b70f036323304ae3dc10ec93fb55",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/data.py": "ae97793b2364aabf8b1b1d5885d92986704d60a9e46c3b4294430eacda4b58f1",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/prepare.py": "2e6d6bd0cd0e9fcfc051c0f7d077d293fd627379783968714798db9f744cc87f",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/run.py": "19b3dd9ea4d14c3adcf5b8a1f92f5560a61bf167135b8802055f886cdbf1d7ed",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/significance.py": "3407768ab8e15f6710a0dc5ced5b5a8aef90d549b7892313a29c18fadccc0752",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/tables.py": "01434befb2b62d3c3ee1b27c3a4a077988a2380b329a405f459797e4872fd805",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_cagecal.py": "762d5a92517e88cecbe566b8682e56f1ddf62fa18d1e38f88e3414e920469a6c",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_reporting.py": "60a69990fccb5f516aa651a53a4a67cd12dcfefe3d791ee4e93aeba705c92e98",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_table_spread.py": "83fa07822b38956dd76e9c42074311069c3efbf558939507447eec31e3c4d259"
   },
   "inference_inputs": {
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/inferences/csqa/vllm__g2-9i--s70v0_k5_full_noval_cs7s--2317cb49/test.jsonl": "70ab00a77470045e3e486aed78e2ae408f6db3fdebedabf8771e1058f154c624",
@@ -269,18 +269,21 @@
   "tie_break": "confidence",
   "tie_seed": 0,
   "question_mask": "intersection of valid solo, pooling and all present selected judge scores per cell",
-  "temperature_calibration": "one output temperature fitted by NLL on the original fitting split; raw ranking metrics unchanged",
+  "temperature_calibration": "one NLL-fitted output temperature for project methods; CAGE-CAL raw uses its disjoint internal validation predictions; raw ranking metrics unchanged",
   "max_raw_replay_difference": 2.3259275799158985e-05,
   "missing_judge_cells": "omitted; counts in separate coverage tables; no substitution",
   "inference": false,
   "refitting": false,
   "cagecal": {
-    "directory": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/baselines/CAGECAL/Counterfactual-Graph-Calibration-for-Multi-Agent-LLMs/results/voting_adapter/5f0d2df353f60fe6",
-    "run_identity": "5f0d2df353f60fe65bd12b64eb1d3d48f5097e89e5b2c5612d7d3ab2a9f52656",
-    "score": "betasb",
-    "method": "cagecal_iid_betasb",
+    "directory": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/baselines/results/voting_adapter/a1fc8f63af8e71c5",
+    "run_identity": "a1fc8f63af8e71c5e447fb1fd4042d68955260859b343bad70d908c65a6858da",
+    "score": "both",
+    "methods": [
+      "cagecal_iid",
+      "cagecal_iid_betasb"
+    ],
     "seeds": 10,
-    "n_cells": 150,
+    "n_cells": 300,
     "calibration": {
       "boolq": {
         "n_questions": 190,
@@ -325,16 +328,15 @@
       }
     },
     "sources": {
-      "manifest.json": "06393fd84abb1ba9dc7b05935dbe5dc5ec830aa6a0fd21279fd41f58e20579ee",
-      "predictions.jsonl": "cd2ecb37a5b5fd69cea0d5bb9c21f52b15067a62d19eae3132eaab22ef3fd59d",
+      "manifest.json": "1c31eb69134fb43ff896eda2fbd1651a0a41d6874e4acfdd472d1cb2cf2cfc98",
+      "predictions.jsonl": "81e2ebf289fa2e252c2b163afd97e0a97fa055696f9dcb0e6f6243522e00c16a",
+      "validation_predictions.jsonl": "5b22d471347349528b83924c64306f4c8a466aaf075c077187c6149d1bdaf42f",
       "calibration.json": "32f15d44494a93cf5191a55f2370dedad6afe268f8e080bcf9a1791651ffef1f",
-      "paper_tables/audit.json": "9b560ba38078309b7029e70427cf30d259982c2195ac2ab52435d1d726dd2632",
-      "paper_tables/cagecal_metrics.csv": "1c8a43938df72635f91b4eb3880cf37c78ff992a56f17b09cd346bb074043e55"
+      "paper_tables/audit.json": "4b0563fc397e390b68f7b327d38a56f815175463d7ec639cee47208c9bc74f2d",
+      "paper_tables/cagecal_metrics.csv": "f8e198cfc4c589b537c3fc1ad941222baeb6aa6c887cd80263dc9e53fae44c47"
     },
-    "prediction": "mean across training seeds, followed by BetaSB when available",
-    "spread": "sample SD across model-group deltas, not training seeds",
-    "same_prediction_across_estimators": "evaluated on each estimator's existing matched question mask",
-    "temperature_metrics": "unavailable: saved predictions contain evaluation questions only"
+    "temperature_metrics": "raw CAGE score only; output temperature fitted on disjoint validation predictions",
+    "same_prediction_across_estimators": "evaluated on each estimator's existing matched question mask"
   },
   "method_labels": {
     "best_solo": "Solo reference",
@@ -352,6 +354,24 @@
     "judge:g3-27i:reasoning_confidence": "Judge g3-27i: reasoning + confidence (approx.)",
     "judge:l32-3bi:reasoning": "Judge l32-3bi: reasoning (approx.)",
     "judge:l32-3bi:reasoning_confidence": "Judge l32-3bi: reasoning + confidence (approx.)",
+    "cagecal_iid": "CAGE-CAL (IID)",
     "cagecal_iid_betasb": "CAGE-CAL (IID + BetaSB)"
+  },
+  "paper_table_render": {
+    "statistic": "mean and sample SD of per-group method-minus-reference deltas",
+    "units": "points (x100)",
+    "metrics": [
+      "t_ece",
+      "t_brier",
+      "auarc",
+      "answer_matched_auarc"
+    ],
+    "code": "paper_results/codes/voting_protocol/tables.py",
+    "code_sha256": "5d86648234d343a7c195260de69bb2eb0a411b307a7ff32ff45558b0709893ef",
+    "files": {
+      "voting_constitency.tex": "e7ef6d6195caf9eeebec9322ef8062782a13e5e5c6301362afe67ceab2a3d5c7",
+      "voting_seq_proba.tex": "e261423ede93167403911cfc295f4a1fa1ea4295c1bec51279397707b10a72bf"
+    },
+    "cagecal": "raw-score row with fitted output temperature; BetaSB retained in detailed reports"
   }
 }

@@ -90,22 +90,21 @@ an error even in approximate mode.
 Each `cons/` and `seq/` directory contains TXT and LaTeX versions of:
 
 - `all_delta`, `all_absolute`: ECE/AUARC, as before.
-- `all_full_delta`, `all_full_absolute`: Acc, ECE, AUARC, AUROC, Brier and NLL,
+- `all_full_delta`, `all_full_absolute`: Acc, ECE, t-ECE, AUARC, answer-matched AUARC, AUROC, Brier, t-Brier and NLL,
   with one accuracy subcolumn per dataset and method row.
 - `all_accuracy_delta`, `all_accuracy_absolute`: a compact accuracy-only table.
 - Equivalent tables prefixed `size_2` through `size_6`.
 - Separate coverage and exploratory significance tables.
 
 All metrics except NLL are displayed multiplied by 100; NLL is in nats. Full
-eight-metric tables are wide, so use a landscape page or resize them for Overleaf.
+nine-metric tables are wide, so use a landscape page or resize them for Overleaf.
 Fragments use `booktabs` and can be inserted with `\\input{...}`. Raw CSV values
 are unscaled. AUROC is unavailable for one-class question sets, never invented.
 
 `atomic.csv` contains each dataset/group/estimator/method's absolute metrics,
 within-group deltas, reference model, coverage, selection rule and judge flags.
 The t-ECE and t-Brier columns apply a single output temperature fitted by NLL
-on the original fitting questions. Raw AUARC and AUROC are unchanged. CAGE-CAL
-t metrics are blank because its saved predictions contain evaluation questions only.
+on the original fitting questions. Raw AUARC and AUROC are unchanged. The raw CAGE-CAL row now has t metrics fitted on its validation predictions; the BetaSB row has no second temperature fit.
 `audit.json` contains source hashes, fitting metrics, target changes, matched IDs,
 all solo metrics, judge mismatches, selection fallback reasons and replay differences. `manifest.json` records
 inputs, code hashes, aggregation choices and all table paths.
@@ -114,9 +113,8 @@ inputs, code hashes, aggregation choices and all table paths.
 
 `--significance` computes exploratory one-sided sign tests on dataset-level mean
 improvements and applies Holm correction jointly across methods, estimators and
-ECE/AUARC. Approximate judges are excluded: with all pooling ablations there are
-40 tests. Five datasets allow a minimum raw p-value of 1/32, insufficient to pass
-this correction. Absence of significance does not establish equivalence.
+ECE/AUARC. Approximate judges are excluded: the number of tests is recorded in significance.csv. With five datasets, a single
+one-sided sign test has a minimum raw p-value of 1/32; interpret corrected results cautiously. Absence of significance does not establish equivalence.
 
 Panels share models and questions; treating them as independent replications
 would exaggerate the evidence. Existing panel-resampling intervals in plots are
@@ -139,31 +137,17 @@ are unchanged. LaTeX uses smaller text for SD and includes a note defining it.
 
 ## CAGE-CAL voting baseline
 
-The report runner includes the completed IID voting adaptation by default, using
-`results/voting_adapter/5f0d2df353f60fe6` beneath the CAGECAL baseline directory.
-The row uses the saved seed-ensemble prediction followed by BetaSB, with the saved
-identity fallback on GPQA and TruthfulQA. It is the same estimator in both panels,
-evaluated on each panel's existing question mask. SD is across model-group deltas,
-not across training seeds. This is an IID adaptation, not an unchanged reproduction
-of every protocol in the CAGE-CAL paper.
+The default report uses `baselines/results/voting_adapter/a1fc8f63af8e71c5`.
+It includes raw IID CAGE-CAL and its separate BetaSB variant on the same
+selected answers and question masks. The raw score receives one output
+temperature fitted on disjoint validation predictions; this is reported as
+t-Brier and t-ECE. BetaSB has no additional temperature fit. Both rows are
+marked as IID voting adaptations. Saved targets, labels, split IDs, metrics,
+and calibration are checked before reporting.
 
-To refresh all existing tables without replaying inference records or refitting:
-
-```bash
-python paper_results/codes/voting_protocol/cagecal.py
-```
-
-This checks targets, fitting/evaluation IDs, matched masks, vote accuracy, and all
-six metrics against the saved CAGE-CAL export before adding rows. Existing rows and
-references are preserved. Repeated runs replace the CAGE-CAL rows, never duplicate
-them. The report manifest records input hashes and calibration fallbacks.
-
-For the full runner, `--cagecal-dir PATH` selects another completed run,
-`--cagecal-score raw` uses the uncalibrated score, and `--no-cagecal` omits the row.
-The refresh command accepts `--cagecal-dir PATH` and `--score raw` too. A different
-question mask or selection rule requires compatible CAGE-CAL outputs; it fails
-instead of silently substituting questions. Back up existing reports before
-switching variants. The default variant is fixed across datasets.
+`--cagecal-dir PATH` selects a compatible completed baseline run.
+`--cagecal-score raw|betasb|both` chooses rows; the default is `both`.
+`--no-cagecal` omits them.
 
 ## Answer-matched comparison and CAGE-CAL
 
@@ -172,7 +156,7 @@ switching variants. The default variant is fixed across datasets.
 fitting-selected reference model. `delta_answer_matched_auarc` compares each
 combination with that fixed-answer reference on identical questions. The
 `*_full_*` tables include both AUARC columns, while the main paper table shows
-the answer-matched delta beside the original absolute AUARC.
+per-group deltas for t-ECE, t-Brier, original AUARC, and answer-matched AUARC (all x100), with the sample SD of those deltas. The compact tables keep one raw CAGE-CAL row with output temperature; the detailed results retain BetaSB.
 
 The default CAGE-CAL source includes raw IID scores and BetaSB scores. The
 raw row has t-Brier and t-ECE from one temperature fitted on the separate

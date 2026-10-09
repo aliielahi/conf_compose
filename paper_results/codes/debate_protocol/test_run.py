@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from run import reference_stream, summary
+from run import reference_stream, summary, paper_table
 
 
 class DebateReportTests(unittest.TestCase):
@@ -39,6 +39,18 @@ class DebateReportTests(unittest.TestCase):
         self.assertAlmostEqual(value, 0)
         self.assertAlmostEqual(spread, 2 ** 0.5 / 10)
         self.assertEqual((count, expected), (2, 2))
+
+    def test_paper_table_uses_group_deltas_for_every_metric(self):
+        fields = ("t_ece", "t_brier", "auarc", "answer_matched_auarc")
+        rows = [{"method": "mean", "task": "boolq", "models": model,
+                 "round": 1, "n_models": 2, **dict.fromkeys(fields, absolute),
+                 **{"delta_" + field: delta for field in fields}}
+                for model, absolute, delta in (("a|b", 0.2, -0.1), ("c|d", 0.8, 0.3))]
+        audits = [{"task": "boolq", "n_models": 2} for _ in rows]
+        text = paper_table(rows, audits, ["boolq"])
+        self.assertEqual(text.count(r"+10.00 {\scriptsize $\pm$ 28.28}"), 4)
+        self.assertNotIn("Absolute metrics", text)
+        self.assertIn(r"$\Delta$t-Brier", text)
 
     def test_target_comparison_uses_the_same_group(self):
         rows = [{'method': method, 'task': 'boolq', 'models': model, 'round': 1,

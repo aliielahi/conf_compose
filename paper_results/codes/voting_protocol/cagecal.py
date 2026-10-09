@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
 from conf_compose.utils import metrics
-from conf_compose.utils.calibration import fit_temperature, temperature_scale
+from conf_compose.utils.calibration import PlattCalibrator, fit_temperature, temperature_scale
 from significance import dataset_sign_tests
 from tables import FULL_METRICS, write_csv, write_significance_tables, write_tables
 
@@ -101,7 +101,7 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="both"):
                 if not (math.isnan(value) and math.isnan(expected)) and not math.isclose(value, expected, abs_tol=1e-12):
                     raise ValueError(f"CAGE-CAL saved {metric} does not match predictions: {key}")
             temperature = None
-            t_values = {"t_brier": None, "t_ece": None}
+            t_values = {"t_brier": None, "t_ece": None, "p_brier": None, "p_ece": None}
             if field == "raw":
                 temperature = (fit_temperature([item["raw"] for item in val], [item["correct"] for item in val])
                                if len({item["correct"] for item in val}) > 1 else 1.0)
@@ -114,6 +114,10 @@ def append_results(rows, cells, directory=DEFAULT_RUN, score="both"):
                 for metric, value in t_values.items():
                     if not math.isclose(value, float(exported[metric]), abs_tol=1e-12):
                         raise ValueError(f"CAGE-CAL saved {metric} does not match validation fit: {key}")
+                if len({item["correct"] for item in val}) > 1:
+                    platt = PlattCalibrator().fit([item["raw"] for item in val],
+                                                  [item["correct"] for item in val]).predict(probabilities)
+                    t_values.update(p_brier=float(metrics.brier(platt, correct)), p_ece=float(metrics.ece(platt, correct)))
             row = dict(references[key], method=method, judge_approximate=False, judge_target_mismatches=0)
             row["output_temperature"] = temperature
             values.update(t_values)

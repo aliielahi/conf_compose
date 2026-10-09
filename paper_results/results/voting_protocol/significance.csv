@@ -19,6 +19,8 @@ cons,blp_equal,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|g
 cons,blp_equal,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
 cons,kahn_diagonal,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,3,0.5,1.0,True
 cons,kahn_diagonal,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
+cons,cagecal_iid,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,4,0.1875,1.0,True
+cons,cagecal_iid,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
 cons,cagecal_iid_betasb,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,4,0.1875,1.0,True
 cons,cagecal_iid_betasb,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
 seq,mean,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,4,0.1875,1.0,True
@@ -41,5 +43,7 @@ seq,blp_equal,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gs
 seq,blp_equal,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,4,0.1875,1.0,True
 seq,kahn_diagonal,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
 seq,kahn_diagonal,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,4,0.1875,1.0,True
+seq,cagecal_iid,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
+seq,cagecal_iid,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,3,0.5,1.0,True
 seq,cagecal_iid_betasb,ece,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,5,0.03125,1.0,True
-seq,cagecal_iid_betasb,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,2,0.8125,1.0,True
+seq,cagecal_iid_betasb,auarc,dataset_mean_over_panels,improves_over_reference,csqa|boolq|gsm8k|truthfulqa|gpqa,5,5,3,0.5,1.0,True

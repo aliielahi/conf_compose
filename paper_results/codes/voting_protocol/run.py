@@ -131,11 +131,12 @@ def main():
     files = write_tables(args.out_dir, rows, metadata, args.estimators, labels, args.tasks)
     if args.out_dir == ROOT / "paper_results/results/voting_protocol":
         paper_tables = ROOT / "paper_results/z_paper_tables"
-        for estimator, name in (("cons", "voting_constitency.tex"), ("seq", "voting_seq_proba.tex")):
+        for estimator, name in (("cons", "voting_constitency"), ("seq", "voting_seq_proba")):
             if estimator in args.estimators:
-                path = paper_tables / name
-                write_paper_table(path, rows, metadata, estimator, labels, args.tasks)
-                files.append(str(path))
+                for calibration, suffix in (("t", ""), ("p", "_platt")):
+                    path = paper_tables / f"{name}{suffix}.tex"
+                    write_paper_table(path, rows, metadata, estimator, labels, args.tasks, calibration)
+                    files.append(str(path))
     statistics_path = args.out_dir / "significance.csv"
     if args.significance:
         tested_labels = {method: label for method, label in labels.items()
@@ -154,7 +155,8 @@ def main():
                 "judge_score": "reused verbalized score; stale-target proxy when old and new answers differ" if args.judge_policy == "approximate" else "verbalized confidence in fixed answer",
                 "judge_policy": args.judge_policy, "tie_break": args.tie_break, "tie_seed": args.tie_seed,
                 "question_mask": "intersection of valid solo, pooling and all present selected judge scores per cell",
-                "temperature_calibration": "one output temperature fitted by NLL on the original fitting split; raw ranking metrics unchanged",
+                "temperature_calibration": "one NLL-fitted output temperature for project methods; CAGE-CAL raw uses its disjoint internal validation predictions; raw ranking metrics unchanged",
+                "platt_calibration": "Platt slope and intercept fitted on the same fitting scores; CAGE-CAL raw uses its disjoint internal validation predictions; raw ranking metrics unchanged",
                 "max_raw_replay_difference": raw_replay_difference,
                 "missing_judge_cells": "omitted; counts in separate coverage tables; no substitution",
                 "inference": False, "refitting": args.refit, "cagecal": cagecal, "method_labels": labels}
