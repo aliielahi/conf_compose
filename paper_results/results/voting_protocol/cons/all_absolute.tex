@@ -1,0 +1,26 @@
+% Units: x100 except NLL (nats). Deltas are calculated within groups before averaging.
+% CAGE-CAL: IID adaptation; seed-ensemble predictions. See manifest.json for dataset-specific BetaSB identity fallbacks.
+% Approximate judge rows reuse scores elicited for old targets; regenerate before publication.
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+Method & \multicolumn{2}{c}{CSQA} & \multicolumn{2}{c}{BoolQ} & \multicolumn{2}{c}{GSM8K} & \multicolumn{2}{c}{TruthfulQA} & \multicolumn{2}{c}{GPQA} \\
+ & ECE $\downarrow$ & AUARC $\uparrow$ & ECE $\downarrow$ & AUARC $\uparrow$ & ECE $\downarrow$ & AUARC $\uparrow$ & ECE $\downarrow$ & AUARC $\uparrow$ & ECE $\downarrow$ & AUARC $\uparrow$ \\
+\midrule
+Solo reference & 7.40 & 85.40 & 1.86 & 91.79 & 6.06 & 97.06 & 8.27 & 85.50 & 23.83 & 53.82 \\
+Arithmetic mean & 4.68 & 92.26 & 4.89 & 95.14 & 10.65 & 99.13 & 6.41 & 91.41 & 14.72 & 57.59 \\
+Log-odds sum & 12.44 & 92.29 & 8.43 & 95.16 & 3.08 & 99.13 & 13.49 & 91.53 & 30.89 & 57.06 \\
+Log-odds mean & 4.10 & 92.29 & 4.13 & 95.16 & 9.79 & 99.13 & 5.71 & 91.53 & 16.50 & 57.06 \\
+Shared rho & 9.95 & 92.29 & 7.46 & 95.16 & 2.61 & 99.13 & 11.26 & 91.53 & 28.25 & 57.06 \\
+Shared scale & 3.29 & 92.29 & 2.15 & 95.16 & 2.39 & 99.13 & 5.97 & 91.53 & 11.45 & 57.06 \\
+Kahn (full covariance) & 6.22 & 92.25 & 4.65 & 95.24 & 4.89 & 99.01 & 6.90 & 91.08 & 13.35 & 56.95 \\
+Weighted BLP & 3.72 & 92.25 & 1.58 & 95.24 & 1.44 & 99.13 & 6.39 & 91.55 & 11.35 & 57.22 \\
+Regularized logistic pooling & 4.73 & 92.27 & 2.19 & 95.24 & 1.44 & 99.13 & 6.45 & 90.80 & 10.95 & 57.54 \\
+Equal-weight BLP & 2.92 & 92.26 & 1.41 & 95.14 & 1.52 & 99.13 & 5.83 & 91.41 & 11.19 & 57.59 \\
+Kahn (diagonal covariance) & 9.64 & 92.29 & 6.43 & 95.25 & 5.74 & 99.14 & 7.57 & 91.96 & 14.48 & 56.87 \\
+Judge g3-27i: reasoning (approx.) & 13.23 & 89.69 & 9.18 & 92.77 & 4.21 & 97.31 & 14.80 & 87.32 & 35.60 & 56.77 \\
+Judge g3-27i: reasoning + confidence (approx.) & 11.79 & 91.51 & 7.92 & 94.46 & 2.79 & 98.66 & 14.82 & 89.58 & 34.47 & 56.45 \\
+Judge l32-3bi: reasoning (approx.) & 7.18 & 85.44 & 3.90 & 92.57 & 6.43 & 97.18 & 10.91 & 81.48 & 35.61 & 54.90 \\
+Judge l32-3bi: reasoning + confidence (approx.) & 7.02 & 88.41 & 5.85 & 94.09 & 6.01 & 97.40 & 11.08 & 81.72 & 35.92 & 54.95 \\
+CAGE-CAL (IID + BetaSB) & 7.92 & 89.74 & 1.30 & 95.12 & 1.87 & 98.63 & 5.10 & 87.18 & 14.66 & 55.79 \\
+\bottomrule
+\end{tabular}

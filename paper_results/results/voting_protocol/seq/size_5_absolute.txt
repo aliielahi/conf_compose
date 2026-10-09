@@ -1,0 +1,27 @@
+Voting protocol / seq / size_5 / absolute
+Acc, ECE, t-ECE, AUARC, AUROC, Brier and t-Brier are x100; NLL is unscaled in nats.
+Each model group has equal weight; the overall table averages groups, not size-table averages.
+Delta = method minus its own group's reference before averaging: negative ECE/Brier/NLL and positive Acc/AUARC/AUROC are improvements.
+Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.
+All present methods and solo models use the same scored questions within each group and estimator.
+Judge rows marked approximate reuse old scores, including changed targets; rerun before publication.
+CAGE-CAL uses the IID voting adaptation and ensemble scores across training seeds; Dataset-specific BetaSB identity fallbacks are recorded in manifest.json.
+
+Method                                          | CSQA ECE | CSQA AUARC | BoolQ ECE | BoolQ AUARC | GSM8K ECE | GSM8K AUARC | TruthfulQA ECE | TruthfulQA AUARC | GPQA ECE | GPQA AUARC
+------------------------------------------------+----------+------------+-----------+-------------+-----------+-------------+----------------+------------------+----------+-----------
+Solo reference                                  | 15.63    | 90.95      | 9.17      | 95.79       | 22.09     | 98.70       | 19.89          | 91.61            | 35.77    | 55.16     
+Arithmetic mean                                 | 5.90     | 93.88      | 5.15      | 95.69       | 24.50     | 98.99       | 8.69           | 92.47            | 19.11    | 60.21     
+Log-odds sum                                    | 16.30    | 94.22      | 10.51     | 95.85       | 26.39     | 98.90       | 16.24          | 93.33            | 43.56    | 61.28     
+Log-odds mean                                   | 9.97     | 94.22      | 7.44      | 95.85       | 24.19     | 98.90       | 8.94           | 93.33            | 25.80    | 61.28     
+Shared rho                                      | 13.71    | 94.22      | 9.38      | 95.85       | 24.52     | 98.90       | 13.41          | 93.33            | 38.01    | 61.28     
+Shared scale                                    | 5.45     | 94.22      | 2.16      | 95.85       | 27.20     | 98.90       | 8.30           | 93.33            | 4.90     | 61.28     
+Kahn (full covariance)                          | 6.23     | 93.76      | 4.65      | 96.23       | 2.21      | 98.90       | 10.87          | 93.48            | 18.63    | 53.62     
+Weighted BLP                                    | 3.66     | 93.52      | 0.78      | 96.38       | 2.29      | 98.95       | 7.99           | 93.26            | 11.82    | 57.28     
+Regularized logistic pooling                    | 3.31     | 94.02      | 1.73      | 96.25       | 1.90      | 98.88       | 8.49           | 93.49            | 19.64    | 53.19     
+Equal-weight BLP                                | 2.20     | 93.88      | 1.59      | 95.69       | 2.12      | 98.99       | 8.64           | 92.47            | 5.22     | 60.21     
+Kahn (diagonal covariance)                      | 15.38    | 94.22      | 10.28     | 96.05       | 16.34     | 98.90       | 10.19          | 93.82            | 7.47     | 57.71     
+Judge g3-27i: reasoning (approx.)               | 12.74    | 89.93      | 9.01      | 93.37       | 3.19      | 98.18       | 14.77          | 88.13            | 30.10    | 62.79     
+Judge g3-27i: reasoning + confidence (approx.)  | 10.85    | 92.62      | 7.68      | 94.80       | 1.73      | 98.89       | 14.17          | 91.63            | 28.96    | 65.22     
+Judge l32-3bi: reasoning (approx.)              | 6.09     | 86.19      | 4.41      | 93.20       | 6.36      | 97.31       | 10.31          | 82.11            | 30.61    | 59.06     
+Judge l32-3bi: reasoning + confidence (approx.) | 6.52     | 86.78      | 4.60      | 93.80       | 5.49      | 96.54       | 10.74          | 79.79            | 31.80    | 61.93     
+CAGE-CAL (IID + BetaSB)                         | 6.82     | 92.12      | 2.19      | 95.94       | 1.50      | 98.96       | 6.65           | 91.01            | 8.17     | 59.68     

@@ -1,0 +1,27 @@
+% Units: x100 except NLL (nats). Deltas are calculated within groups before averaging.
+% CAGE-CAL: IID adaptation; seed-ensemble predictions. See manifest.json for dataset-specific BetaSB identity fallbacks.
+% Approximate judge rows reuse scores elicited for old targets; regenerate before publication.
+\begin{tabular}{lrrrrr}
+\toprule
+Method & \multicolumn{1}{c}{CSQA} & \multicolumn{1}{c}{BoolQ} & \multicolumn{1}{c}{GSM8K} & \multicolumn{1}{c}{TruthfulQA} & \multicolumn{1}{c}{GPQA} \\
+ & $\Delta$ Acc $\uparrow$ & $\Delta$ Acc $\uparrow$ & $\Delta$ Acc $\uparrow$ & $\Delta$ Acc $\uparrow$ & $\Delta$ Acc $\uparrow$ \\
+\midrule
+Solo reference & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} \\
+Arithmetic mean & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Log-odds sum & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Log-odds mean & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Shared rho & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Shared scale & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Kahn (full covariance) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Weighted BLP & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Regularized logistic pooling & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Equal-weight BLP & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Kahn (diagonal covariance) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Judge g3-27i: reasoning (approx.) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Judge g3-27i: reasoning + confidence (approx.) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Judge l32-3bi: reasoning (approx.) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+Judge l32-3bi: reasoning + confidence (approx.) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+CAGE-CAL (IID + BetaSB) & +3.63 {\scriptsize $\pm$ 0.05} & +0.37 {\scriptsize $\pm$ 0.15} & +1.26 {\scriptsize $\pm$ 0.08} & +0.95 {\scriptsize $\pm$ 0.00} & +6.85 {\scriptsize $\pm$ 1.83} \\
+\bottomrule
+\multicolumn{6}{l}{\scriptsize Mean $\pm$ SD across groups (sample SD); descriptive, not a confidence interval.} \\
+\end{tabular}

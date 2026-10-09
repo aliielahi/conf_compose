@@ -1,0 +1,20 @@
+Available/expected model groups; per-question coverage is in atomic.csv and audit.json.
+
+Method                                          | CSQA | BoolQ | GSM8K | TruthfulQA | GPQA
+------------------------------------------------+------+-------+-------+------------+-----
+Solo reference                                  | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Arithmetic mean                                 | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Log-odds sum                                    | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Log-odds mean                                   | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Shared rho                                      | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Shared scale                                    | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Kahn (full covariance)                          | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Weighted BLP                                    | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Regularized logistic pooling                    | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Equal-weight BLP                                | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Kahn (diagonal covariance)                      | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Judge g3-27i: reasoning (approx.)               | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Judge g3-27i: reasoning + confidence (approx.)  | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Judge l32-3bi: reasoning (approx.)              | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+Judge l32-3bi: reasoning + confidence (approx.) | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 
+CAGE-CAL (IID + BetaSB)                         | 4/4  | 4/4   | 4/4   | 4/4        | 4/4 

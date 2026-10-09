@@ -1,0 +1,12 @@
+Method | CSQA | BOOLQ | GSM8K | TRUTHFULQA | GPQA
+Single stream, same answer | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Arithmetic mean | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Log-odds sum | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Log-odds mean | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Shared rho | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Shared scale | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Kahn (full covariance) | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Weighted BLP | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Regularized logistic pooling | 15/15 | 14/15 | 15/15 | 15/15 | 15/15
+Equal-weight BLP | 15/15 | 15/15 | 15/15 | 15/15 | 15/15
+Kahn (diagonal covariance) | 15/15 | 15/15 | 15/15 | 15/15 | 15/15

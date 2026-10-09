@@ -1,0 +1,54 @@
+Voting protocol: headline numbers (points = 100 x metric; deltas vs each group's solo reference)
+Intervals describe panel resampling; overlapping panels are not independent replications.
+Best pooling below compares the eight main methods; ablations are reported separately.
+
+[Consistency]
+  Best calibrated pooling: Weighted BLP, Delta ECE -4.59 [-5.65, -3.60], lower ECE than the solo reference in 95% of 75 panels.
+  Runner-up: Shared scale -4.43; worst: Log-odds sum +4.18.
+  Pooling AUARC deltas range from +4.19 to +4.39 (spread between methods 0.20 points).
+  Log-odds sum Delta ECE by size: 2: +2.1, 3: +3.4, 4: +5.1, 5: +5.9, 6: +6.8   (descriptive comparison; model composition also changes with group size)
+  Shared scale Delta ECE by size: 2: -4.6, 3: -4.6, 4: -3.9, 5: -4.1, 6: -4.8
+  Weighted BLP Delta ECE by dataset: CSQA -3.7, BoolQ -0.3, GSM8K -4.6, TruthfulQA -1.9, GPQA -12.5
+
+[Sequence probability]
+  Best calibrated pooling: Weighted BLP, Delta ECE -15.48 [-16.95, -14.14], lower ECE than the solo reference in 100% of 75 panels.
+  Runner-up: Logistic pool -14.43; worst: Log-odds sum +1.42.
+  Pooling AUARC deltas range from +0.11 to +1.43 (spread between methods 1.32 points).
+  Log-odds sum Delta ECE by size: 2: +1.3, 3: +0.7, 4: +1.5, 5: +2.1, 6: +2.4   (descriptive comparison; model composition also changes with group size)
+  Shared scale Delta ECE by size: 2: -9.7, 3: -11.1, 4: -10.2, 5: -10.9, 6: -10.8
+  Weighted BLP Delta ECE by dataset: CSQA -12.6, BoolQ -8.9, GSM8K -19.9, TruthfulQA -11.2, GPQA -24.7
+
+[Accuracy and AUARC changes]
+  Consistency: vote accuracy +1.37 points over the AUARC reference; corr(accuracy gain, AUARC gain) = 0.30; ranking-skill gain Mean +23.8, Log-odds sum +23.7, Weighted BLP +24.0, Logistic pool +23.5
+  Sequence probability: vote accuracy +1.38 points over the AUARC reference; corr(accuracy gain, AUARC gain) = 0.77; ranking-skill gain Mean +1.9, Log-odds sum +2.9, Weighted BLP +3.0, Logistic pool -0.8
+
+[Methods that rank identically: only their calibration differs]
+  Log-odds sum and Log-odds mean: same AUARC in 100% of 150 panels
+  Log-odds sum and Shared rho: same AUARC in 100% of 150 panels
+  Log-odds sum and Shared scale: same AUARC in 100% of 150 panels
+  Mean and Equal-weight BLP: same AUARC in 100% of 150 panels
+
+[Ablations: unequal weights for BLP; off-diagonal covariance for Kahn]
+  Consistency: Weighted BLP minus Equal-weight BLP: ECE +0.32, AUARC -0.03; lower ECE in 37% of panels
+  Consistency: Kahn minus Kahn (diagonal): ECE -1.57, AUARC -0.20; lower ECE in 73% of panels
+  Consistency: recalibrating the plain mean (Equal-weight BLP minus Mean, identical ranking): ECE -3.70
+  Sequence probability: Weighted BLP minus Equal-weight BLP: ECE +0.66, AUARC +0.14; lower ECE in 39% of panels
+  Sequence probability: Kahn minus Kahn (diagonal): ECE -2.85, AUARC -0.73; lower ECE in 72% of panels
+  Sequence probability: recalibrating the plain mean (Equal-weight BLP minus Mean, identical ranking): ECE -8.54
+
+[Judges, on groups where all four judge rows exist, APPROXIMATE reused scores, including changed targets]
+  Consistency / 27B: showing confidences changes ECE by -1.05
+  Consistency / 27B: showing confidences changes AUARC by +1.36
+  Consistency / 3B: showing confidences changes ECE by +0.37
+  Consistency / 3B: showing confidences changes AUARC by +1.00
+  Consistency: on the same 75 panels, ECE Weighted BLP 4.89 vs Judge 27B + conf 14.36
+  Sequence probability / 27B: showing confidences changes ECE by -1.66
+  Sequence probability / 27B: showing confidences changes AUARC by +1.92
+  Sequence probability / 3B: showing confidences changes ECE by +0.55
+  Sequence probability / 3B: showing confidences changes AUARC by +0.44
+  Sequence probability: on the same 75 panels, ECE Weighted BLP 5.05 vs Judge 27B + conf 13.73
+
+[Consistency vs sequence probability as the pooled input]
+  Solo reference: sequence has lower ECE in 0% and higher AUARC in 89% of panels
+  Mean: sequence has lower ECE in 27% and higher AUARC in 49% of panels
+  Weighted BLP: sequence has lower ECE in 47% and higher AUARC in 59% of panels

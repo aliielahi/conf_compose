@@ -1,0 +1,28 @@
+Voting protocol / cons / size_6 / delta
+Acc, ECE, t-ECE, AUARC, AUROC, Brier and t-Brier are x100; NLL is unscaled in nats.
+Each model group has equal weight; the overall table averages groups, not size-table averages.
+Delta = method minus its own group's reference before averaging: negative ECE/Brier/NLL and positive Acc/AUARC/AUROC are improvements.
+Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.
+All present methods and solo models use the same scored questions within each group and estimator.
+Judge rows marked approximate reuse old scores, including changed targets; rerun before publication.
+CAGE-CAL uses the IID voting adaptation and ensemble scores across training seeds; Dataset-specific BetaSB identity fallbacks are recorded in manifest.json.
+Mean ± sample standard deviation of group-level deltas (ddof=1); descriptive variation, not a standard error or confidence interval. SD omitted for fewer than two groups.
+
+Method                                          | CSQA Delta Acc | BoolQ Delta Acc | GSM8K Delta Acc | TruthfulQA Delta Acc | GPQA Delta Acc
+------------------------------------------------+----------------+-----------------+-----------------+----------------------+---------------
+Solo reference                                  | +0.00 ± 0.00   | +0.00 ± 0.00    | +0.00 ± 0.00    | +0.00 ± 0.00         | +0.00 ± 0.00  
+Arithmetic mean                                 | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Log-odds sum                                    | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Log-odds mean                                   | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Shared rho                                      | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Shared scale                                    | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Kahn (full covariance)                          | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Weighted BLP                                    | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Regularized logistic pooling                    | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Equal-weight BLP                                | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Kahn (diagonal covariance)                      | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Judge g3-27i: reasoning (approx.)               | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Judge g3-27i: reasoning + confidence (approx.)  | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Judge l32-3bi: reasoning (approx.)              | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+Judge l32-3bi: reasoning + confidence (approx.) | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  
+CAGE-CAL (IID + BetaSB)                         | +3.31 ± 0.50   | +0.96 ± 0.06    | +1.59 ± 0.54    | +0.48 ± 0.34         | +7.24 ± 1.01  

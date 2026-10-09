@@ -1,0 +1,25 @@
+% Post-debate consistency composition, round 1; groups of 5 models; Delta from arithmetic mean.
+% Each dataset/model group has equal weight. Differences are calculated per group before averaging.
+% Acc uses every evaluation question; confidence metrics use the group's common scored-question mask.
+% ECE, t-ECE, AUARC, AUROC, Acc, Brier and t-Brier are x100; NLL is unscaled (nats).
+% Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements.
+% ± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.
+% Every method scores the same selected debate answer on the same questions.
+\begin{tabular}{lrrrrrrrrrr}
+\toprule
+Method & \multicolumn{2}{c}{CSQA} & \multicolumn{2}{c}{BOOLQ} & \multicolumn{2}{c}{GSM8K} & \multicolumn{2}{c}{TRUTHFULQA} & \multicolumn{2}{c}{GPQA} \\
+ & $\Delta$ ECE $\downarrow$ & $\Delta$ AUARC $\uparrow$ & $\Delta$ ECE $\downarrow$ & $\Delta$ AUARC $\uparrow$ & $\Delta$ ECE $\downarrow$ & $\Delta$ AUARC $\uparrow$ & $\Delta$ ECE $\downarrow$ & $\Delta$ AUARC $\uparrow$ & $\Delta$ ECE $\downarrow$ & $\Delta$ AUARC $\uparrow$ \\
+\midrule
+Single stream, same answer & +4.93 {\scriptsize $\pm$ 1.65} & -5.25 {\scriptsize $\pm$ 0.68} & -4.60 {\scriptsize $\pm$ 5.73} & -0.23 {\scriptsize $\pm$ 1.80} & -3.63 {\scriptsize $\pm$ 2.32} & -1.09 {\scriptsize $\pm$ 0.24} & -0.23 {\scriptsize $\pm$ 0.34} & -5.69 {\scriptsize $\pm$ 0.81} & +16.10 {\scriptsize $\pm$ 1.94} & -5.02 {\scriptsize $\pm$ 0.60} \\
+Arithmetic mean & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} \\
+Log-odds sum & +12.00 {\scriptsize $\pm$ 2.38} & +0.01 {\scriptsize $\pm$ 0.02} & +2.80 {\scriptsize $\pm$ 6.92} & +0.08 {\scriptsize $\pm$ 0.09} & -6.44 {\scriptsize $\pm$ 1.98} & +0.02 {\scriptsize $\pm$ 0.01} & +7.20 {\scriptsize $\pm$ 1.05} & +0.04 {\scriptsize $\pm$ 0.01} & +21.88 {\scriptsize $\pm$ 1.17} & -0.00 {\scriptsize $\pm$ 0.23} \\
+Log-odds mean & -0.20 {\scriptsize $\pm$ 1.64} & +0.01 {\scriptsize $\pm$ 0.02} & -2.25 {\scriptsize $\pm$ 2.32} & +0.08 {\scriptsize $\pm$ 0.09} & -1.19 {\scriptsize $\pm$ 0.69} & +0.02 {\scriptsize $\pm$ 0.01} & -0.73 {\scriptsize $\pm$ 0.98} & +0.04 {\scriptsize $\pm$ 0.01} & +3.45 {\scriptsize $\pm$ 0.98} & -0.00 {\scriptsize $\pm$ 0.23} \\
+Shared rho & +9.39 {\scriptsize $\pm$ 2.10} & +0.01 {\scriptsize $\pm$ 0.02} & +1.16 {\scriptsize $\pm$ 6.91} & +0.08 {\scriptsize $\pm$ 0.09} & -7.81 {\scriptsize $\pm$ 1.93} & +0.02 {\scriptsize $\pm$ 0.01} & +5.82 {\scriptsize $\pm$ 0.93} & +0.04 {\scriptsize $\pm$ 0.01} & +17.98 {\scriptsize $\pm$ 0.05} & -0.00 {\scriptsize $\pm$ 0.23} \\
+Shared scale & -0.34 {\scriptsize $\pm$ 2.07} & +0.01 {\scriptsize $\pm$ 0.02} & -5.44 {\scriptsize $\pm$ 4.85} & +0.08 {\scriptsize $\pm$ 0.09} & -8.57 {\scriptsize $\pm$ 2.10} & +0.02 {\scriptsize $\pm$ 0.01} & -0.16 {\scriptsize $\pm$ 2.20} & +0.04 {\scriptsize $\pm$ 0.01} & -7.69 {\scriptsize $\pm$ 2.43} & -0.00 {\scriptsize $\pm$ 0.23} \\
+Kahn (full covariance) & +3.39 {\scriptsize $\pm$ 1.82} & -1.13 {\scriptsize $\pm$ 1.78} & -3.67 {\scriptsize $\pm$ 4.75} & +2.11 {\scriptsize $\pm$ 2.38} & -6.38 {\scriptsize $\pm$ 1.71} & +0.04 {\scriptsize $\pm$ 0.01} & -0.61 {\scriptsize $\pm$ 0.02} & -0.46 {\scriptsize $\pm$ 1.00} & -0.86 {\scriptsize $\pm$ 1.71} & -0.82 {\scriptsize $\pm$ 1.19} \\
+Weighted BLP & +0.26 {\scriptsize $\pm$ 1.07} & -0.14 {\scriptsize $\pm$ 0.60} & -5.82 {\scriptsize $\pm$ 5.65} & +1.32 {\scriptsize $\pm$ 1.37} & -8.92 {\scriptsize $\pm$ 2.00} & +0.01 {\scriptsize $\pm$ 0.01} & -1.43 {\scriptsize $\pm$ 1.11} & +0.07 {\scriptsize $\pm$ 0.22} & +0.06 {\scriptsize $\pm$ 1.33} & +0.09 {\scriptsize $\pm$ 1.21} \\
+Regularized logistic pooling & +0.75 {\scriptsize $\pm$ 2.42} & -1.21 {\scriptsize $\pm$ 1.80} & -5.65 {\scriptsize $\pm$ 6.23} & +2.08 {\scriptsize $\pm$ 2.31} & -8.92 {\scriptsize $\pm$ 1.58} & -0.00 {\scriptsize $\pm$ 0.02} & -0.39 {\scriptsize $\pm$ 2.32} & -0.54 {\scriptsize $\pm$ 1.00} & -3.02 {\scriptsize $\pm$ 0.30} & -1.11 {\scriptsize $\pm$ 0.90} \\
+Equal-weight BLP & -0.96 {\scriptsize $\pm$ 0.06} & +0.00 {\scriptsize $\pm$ 0.00} & -5.48 {\scriptsize $\pm$ 4.24} & +0.00 {\scriptsize $\pm$ 0.00} & -8.86 {\scriptsize $\pm$ 2.24} & +0.00 {\scriptsize $\pm$ 0.00} & -0.79 {\scriptsize $\pm$ 1.56} & +0.00 {\scriptsize $\pm$ 0.00} & -5.99 {\scriptsize $\pm$ 2.62} & +0.00 {\scriptsize $\pm$ 0.00} \\
+Kahn (diagonal covariance) & +8.36 {\scriptsize $\pm$ 3.74} & +0.16 {\scriptsize $\pm$ 0.21} & -0.31 {\scriptsize $\pm$ 5.32} & +2.07 {\scriptsize $\pm$ 2.44} & -5.07 {\scriptsize $\pm$ 1.76} & +0.04 {\scriptsize $\pm$ 0.00} & +3.24 {\scriptsize $\pm$ 1.50} & +0.23 {\scriptsize $\pm$ 0.05} & +4.00 {\scriptsize $\pm$ 1.72} & +1.15 {\scriptsize $\pm$ 1.76} \\
+\bottomrule
+\end{tabular}

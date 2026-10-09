@@ -1,0 +1,25 @@
+% Post-debate consistency composition, round 1; all 15 model groups; Absolute results.
+% Each dataset/model group has equal weight. Differences are calculated per group before averaging.
+% Acc uses every evaluation question; confidence metrics use the group's common scored-question mask.
+% ECE, t-ECE, AUARC, AUROC, Acc, Brier and t-Brier are x100; NLL is unscaled (nats).
+% Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements.
+% ± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.
+% Every method scores the same selected debate answer on the same questions.
+\begin{tabular}{lrrrrr}
+\toprule
+Method & \multicolumn{1}{c}{CSQA} & \multicolumn{1}{c}{BOOLQ} & \multicolumn{1}{c}{GSM8K} & \multicolumn{1}{c}{TRUTHFULQA} & \multicolumn{1}{c}{GPQA} \\
+ & ACCURACY $\uparrow$ & ACCURACY $\uparrow$ & ACCURACY $\uparrow$ & ACCURACY $\uparrow$ & ACCURACY $\uparrow$ \\
+\midrule
+Single stream, same answer & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Arithmetic mean & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Log-odds sum & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Log-odds mean & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Shared rho & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Shared scale & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Kahn (full covariance) & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Weighted BLP & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Regularized logistic pooling & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Equal-weight BLP & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+Kahn (diagonal covariance) & 79.56 & 86.76 & 94.81 & 78.29 & 48.56 \\
+\bottomrule
+\end{tabular}

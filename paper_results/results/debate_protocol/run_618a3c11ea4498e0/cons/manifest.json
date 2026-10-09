@@ -1,0 +1,29 @@
+{
+  "source_run": "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/debate_composition/run_618a3c11ea4498e0",
+  "source_run_id": "618a3c11ea4498e0",
+  "source_manifest_sha256": "1a6a310ed78cd68c650a604e69de32e10a7ca90864a418012a0987f7f943a3a3",
+  "source_metrics_sha256": "44ceff7d70b95b692314e1ef694f9e303387807a1b395d4850e23383d21a07b2",
+  "report_code_sha256": "f756cf99cf461bd76f381151ff15a9d4f05222326eabbc9e778ab970a9d74481",
+  "tasks": [
+    "csqa",
+    "boolq",
+    "gsm8k",
+    "truthfulqa",
+    "gpqa"
+  ],
+  "groups_per_task": {
+    "csqa": 15,
+    "boolq": 15,
+    "gsm8k": 15,
+    "truthfulqa": 15,
+    "gpqa": 15
+  },
+  "rounds": [
+    1
+  ],
+  "estimator": "cons",
+  "n_rows": 825,
+  "significance": "exploratory one-sided dataset-block sign tests with joint Holm correction",
+  "accuracy": "all evaluation questions; confidence metrics use each group common matched subset",
+  "temperature_calibration": "one output temperature fitted by NLL on original fitting questions; AUARC unchanged"
+}

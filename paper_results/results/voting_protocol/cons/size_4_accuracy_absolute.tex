@@ -1,0 +1,26 @@
+% Units: x100 except NLL (nats). Deltas are calculated within groups before averaging.
+% CAGE-CAL: IID adaptation; seed-ensemble predictions. See manifest.json for dataset-specific BetaSB identity fallbacks.
+% Approximate judge rows reuse scores elicited for old targets; regenerate before publication.
+\begin{tabular}{lrrrrr}
+\toprule
+Method & \multicolumn{1}{c}{CSQA} & \multicolumn{1}{c}{BoolQ} & \multicolumn{1}{c}{GSM8K} & \multicolumn{1}{c}{TruthfulQA} & \multicolumn{1}{c}{GPQA} \\
+ & Acc $\uparrow$ & Acc $\uparrow$ & Acc $\uparrow$ & Acc $\uparrow$ & Acc $\uparrow$ \\
+\midrule
+Solo reference & 77.75 & 88.02 & 94.07 & 74.88 & 47.79 \\
+Arithmetic mean & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Log-odds sum & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Log-odds mean & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Shared rho & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Shared scale & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Kahn (full covariance) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Weighted BLP & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Regularized logistic pooling & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Equal-weight BLP & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Kahn (diagonal covariance) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Judge g3-27i: reasoning (approx.) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Judge g3-27i: reasoning + confidence (approx.) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Judge l32-3bi: reasoning (approx.) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+Judge l32-3bi: reasoning + confidence (approx.) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+CAGE-CAL (IID + BetaSB) & 81.81 & 88.97 & 95.20 & 74.49 & 49.71 \\
+\bottomrule
+\end{tabular}

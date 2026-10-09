@@ -1,0 +1,12 @@
+Method | CSQA | BOOLQ | GSM8K | TRUTHFULQA | GPQA
+Single stream, same answer | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Arithmetic mean | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Log-odds sum | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Log-odds mean | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Shared rho | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Shared scale | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Kahn (full covariance) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Weighted BLP | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Regularized logistic pooling | 3/3 | 2/3 | 3/3 | 3/3 | 3/3
+Equal-weight BLP | 3/3 | 3/3 | 3/3 | 3/3 | 3/3
+Kahn (diagonal covariance) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3

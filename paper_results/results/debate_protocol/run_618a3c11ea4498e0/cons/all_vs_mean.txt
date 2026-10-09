@@ -1,0 +1,21 @@
+Post-debate consistency composition, round 1; all 15 model groups; Delta from arithmetic mean.
+Each dataset/model group has equal weight. Differences are calculated per group before averaging.
+Acc uses every evaluation question; confidence metrics use the group's common scored-question mask.
+ECE, t-ECE, AUARC, AUROC, Acc, Brier and t-Brier are x100; NLL is unscaled (nats).
+Positive delta AUARC/AUROC/Acc and negative delta ECE/Brier/NLL are improvements.
+± is sample SD across model groups, not a confidence interval. See coverage tables for group counts.
+Every method scores the same selected debate answer on the same questions.
+
+Method                       | CSQA ECE      | CSQA AUARC   | BOOLQ ECE    | BOOLQ AUARC  | GSM8K ECE    | GSM8K AUARC  | TRUTHFULQA ECE | TRUTHFULQA AUARC | GPQA ECE      | GPQA AUARC  
+-----------------------------+---------------+--------------+--------------+--------------+--------------+--------------+----------------+------------------+---------------+-------------
+Single stream, same answer   | +3.89 ± 1.65  | -4.30 ± 1.17 | -0.95 ± 3.11 | -1.49 ± 1.04 | -2.79 ± 1.64 | -1.26 ± 0.42 | +1.46 ± 1.68   | -4.97 ± 2.41     | +9.42 ± 5.45  | -3.12 ± 1.75
+Arithmetic mean              | +0.00 ± 0.00  | +0.00 ± 0.00 | +0.00 ± 0.00 | +0.00 ± 0.00 | +0.00 ± 0.00 | +0.00 ± 0.00 | +0.00 ± 0.00   | +0.00 ± 0.00     | +0.00 ± 0.00  | +0.00 ± 0.00
+Log-odds sum                 | +11.12 ± 1.80 | +0.02 ± 0.03 | +6.09 ± 3.10 | +0.03 ± 0.05 | -5.25 ± 1.94 | +0.01 ± 0.01 | +9.70 ± 1.76   | +0.03 ± 0.03     | +14.79 ± 5.40 | +0.03 ± 0.16
+Log-odds mean                | +0.37 ± 1.08  | +0.02 ± 0.03 | -0.95 ± 1.27 | +0.03 ± 0.05 | -0.79 ± 0.60 | +0.01 ± 0.01 | +0.80 ± 1.11   | +0.03 ± 0.03     | +2.06 ± 1.79  | +0.03 ± 0.16
+Shared rho                   | +9.33 ± 1.27  | +0.02 ± 0.03 | +4.94 ± 3.20 | +0.03 ± 0.05 | -6.50 ± 1.96 | +0.01 ± 0.01 | +7.91 ± 1.67   | +0.03 ± 0.03     | +12.30 ± 4.35 | +0.03 ± 0.16
+Shared scale                 | -0.42 ± 1.52  | +0.02 ± 0.03 | -2.12 ± 2.65 | +0.03 ± 0.05 | -7.25 ± 1.89 | +0.01 ± 0.01 | +0.97 ± 1.72   | +0.03 ± 0.03     | -13.99 ± 5.08 | +0.03 ± 0.16
+Kahn (full covariance)       | +1.95 ± 2.18  | -0.15 ± 0.69 | -0.16 ± 2.82 | +0.65 ± 1.40 | -4.34 ± 2.47 | -0.13 ± 0.46 | +0.15 ± 1.82   | +0.06 ± 0.44     | -9.98 ± 7.15  | -0.24 ± 2.14
+Weighted BLP                 | -0.42 ± 1.63  | +0.06 ± 0.21 | -2.63 ± 3.01 | +0.44 ± 0.78 | -7.24 ± 2.06 | +0.01 ± 0.04 | +0.05 ± 1.92   | +0.16 ± 0.49     | -10.33 ± 8.75 | -0.20 ± 1.99
+Regularized logistic pooling | -0.56 ± 1.57  | -0.19 ± 0.71 | -2.07 ± 3.13 | +0.67 ± 1.44 | -7.03 ± 2.15 | -0.03 ± 0.16 | +0.87 ± 2.35   | +0.03 ± 0.45     | -12.07 ± 7.01 | -0.43 ± 2.14
+Equal-weight BLP             | -0.86 ± 1.37  | +0.00 ± 0.00 | -2.18 ± 2.14 | +0.00 ± 0.00 | -7.45 ± 1.99 | +0.00 ± 0.00 | +0.19 ± 1.50   | +0.00 ± 0.00     | -11.87 ± 6.12 | +0.00 ± 0.00
+Kahn (diagonal covariance)   | +4.85 ± 3.99  | +0.15 ± 0.14 | +1.98 ± 2.77 | +0.67 ± 1.37 | -3.68 ± 2.26 | +0.03 ± 0.03 | +1.80 ± 2.93   | +0.21 ± 0.23     | -9.14 ± 8.95  | +0.34 ± 1.54

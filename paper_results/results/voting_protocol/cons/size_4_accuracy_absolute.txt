@@ -1,0 +1,27 @@
+Voting protocol / cons / size_4 / absolute
+Acc, ECE, t-ECE, AUARC, AUROC, Brier and t-Brier are x100; NLL is unscaled in nats.
+Each model group has equal weight; the overall table averages groups, not size-table averages.
+Delta = method minus its own group's reference before averaging: negative ECE/Brier/NLL and positive Acc/AUARC/AUROC are improvements.
+Panel counts are in the matching coverage table; -- means unavailable. Partial rows use different groups.
+All present methods and solo models use the same scored questions within each group and estimator.
+Judge rows marked approximate reuse old scores, including changed targets; rerun before publication.
+CAGE-CAL uses the IID voting adaptation and ensemble scores across training seeds; Dataset-specific BetaSB identity fallbacks are recorded in manifest.json.
+
+Method                                          | CSQA Acc | BoolQ Acc | GSM8K Acc | TruthfulQA Acc | GPQA Acc
+------------------------------------------------+----------+-----------+-----------+----------------+---------
+Solo reference                                  | 77.75    | 88.02     | 94.07     | 74.88          | 47.79   
+Arithmetic mean                                 | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Log-odds sum                                    | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Log-odds mean                                   | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Shared rho                                      | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Shared scale                                    | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Kahn (full covariance)                          | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Weighted BLP                                    | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Regularized logistic pooling                    | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Equal-weight BLP                                | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Kahn (diagonal covariance)                      | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Judge g3-27i: reasoning (approx.)               | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Judge g3-27i: reasoning + confidence (approx.)  | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Judge l32-3bi: reasoning (approx.)              | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+Judge l32-3bi: reasoning + confidence (approx.) | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
+CAGE-CAL (IID + BetaSB)                         | 81.81    | 88.97     | 95.20     | 74.49          | 49.71   
