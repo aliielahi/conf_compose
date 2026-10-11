@@ -25,3 +25,7 @@ current_run.tmp
 brainstorms/
 
 brainstorms_codex
+
+paper_results/results
+
+paper_results/weighting_study
