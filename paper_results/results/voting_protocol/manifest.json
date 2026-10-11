@@ -36,15 +36,15 @@
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/voting_atomic/learned_panels_confidence_tie_v2/seq.csv": "d7166679770d69dc55ecdcbdc8959b8d7bfb89c98cfcd60afcd933c0723bfbe1"
   },
   "report_code": {
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/cagecal.py": "c4a63b3d8d58353f59d66e99446874b3c7d0b70f036323304ae3dc10ec93fb55",
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/data.py": "ae97793b2364aabf8b1b1d5885d92986704d60a9e46c3b4294430eacda4b58f1",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/cagecal.py": "07df957e8e63d3d68c82836023c0814789d454e582a6aa5e74544afa7d5f4654",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/data.py": "cee0e62d96c391c970965815171b221c74f58b235ce112253abfcb8738308d07",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/prepare.py": "2e6d6bd0cd0e9fcfc051c0f7d077d293fd627379783968714798db9f744cc87f",
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/run.py": "19b3dd9ea4d14c3adcf5b8a1f92f5560a61bf167135b8802055f886cdbf1d7ed",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/run.py": "acfe39c6db38720e38cd7219cbf8731bd0a1fa98021efbf7d9cfa60a6e98168f",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/significance.py": "3407768ab8e15f6710a0dc5ced5b5a8aef90d549b7892313a29c18fadccc0752",
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/tables.py": "01434befb2b62d3c3ee1b27c3a4a077988a2380b329a405f459797e4872fd805",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/tables.py": "ebada4e75021c1dfad570f87b97bb5c3c9e4e00b81bf7b1d257811664913f485",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_cagecal.py": "762d5a92517e88cecbe566b8682e56f1ddf62fa18d1e38f88e3414e920469a6c",
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_reporting.py": "60a69990fccb5f516aa651a53a4a67cd12dcfefe3d791ee4e93aeba705c92e98",
-    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_table_spread.py": "83fa07822b38956dd76e9c42074311069c3efbf558939507447eec31e3c4d259"
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_reporting.py": "018235d004a04ae7d903ef738f9ab7809558e82055a6761e8a3f9bd97d6883c4",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/codes/voting_protocol/test_table_spread.py": "700b6551f193ea3d5c16a7529912c4a68562e58c4c878617767c802627669334"
   },
   "inference_inputs": {
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/results/inferences/csqa/vllm__g2-9i--s70v0_k5_full_noval_cs7s--2317cb49/test.jsonl": "70ab00a77470045e3e486aed78e2ae408f6db3fdebedabf8771e1058f154c624",
@@ -254,7 +254,9 @@
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/results/voting_protocol/seq/size_6_coverage.txt",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/results/voting_protocol/seq/size_6_coverage.tex",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/z_paper_tables/voting_constitency.tex",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/z_paper_tables/voting_constitency_platt.tex",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/z_paper_tables/voting_seq_proba.tex",
+    "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/z_paper_tables/voting_seq_proba_platt.tex",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/results/voting_protocol/cons/significance.txt",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/results/voting_protocol/cons/significance.tex",
     "/Users/ali/Documents/UIC/Projects/2026-conf-compose/conf_compose/paper_results/results/voting_protocol/seq/significance.txt",
@@ -270,6 +272,7 @@
   "tie_seed": 0,
   "question_mask": "intersection of valid solo, pooling and all present selected judge scores per cell",
   "temperature_calibration": "one NLL-fitted output temperature for project methods; CAGE-CAL raw uses its disjoint internal validation predictions; raw ranking metrics unchanged",
+  "platt_calibration": "Platt slope and intercept fitted on the same fitting scores; CAGE-CAL raw uses its disjoint internal validation predictions; raw ranking metrics unchanged",
   "max_raw_replay_difference": 2.3259275799158985e-05,
   "missing_judge_cells": "omitted; counts in separate coverage tables; no substitution",
   "inference": false,
@@ -356,22 +359,5 @@
     "judge:l32-3bi:reasoning_confidence": "Judge l32-3bi: reasoning + confidence (approx.)",
     "cagecal_iid": "CAGE-CAL (IID)",
     "cagecal_iid_betasb": "CAGE-CAL (IID + BetaSB)"
-  },
-  "paper_table_render": {
-    "statistic": "mean and sample SD of per-group method-minus-reference deltas",
-    "units": "points (x100)",
-    "metrics": [
-      "t_ece",
-      "t_brier",
-      "auarc",
-      "answer_matched_auarc"
-    ],
-    "code": "paper_results/codes/voting_protocol/tables.py",
-    "code_sha256": "5d86648234d343a7c195260de69bb2eb0a411b307a7ff32ff45558b0709893ef",
-    "files": {
-      "voting_constitency.tex": "e7ef6d6195caf9eeebec9322ef8062782a13e5e5c6301362afe67ceab2a3d5c7",
-      "voting_seq_proba.tex": "e261423ede93167403911cfc295f4a1fa1ea4295c1bec51279397707b10a72bf"
-    },
-    "cagecal": "raw-score row with fitted output temperature; BetaSB retained in detailed reports"
   }
 }

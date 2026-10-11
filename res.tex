@@ -1,0 +1,153 @@
+\section{Results}
+
+
+\begin{figure}[t]
+  \centering
+  \input{./ARR-October/imgs/calibration_plot.tex}
+  \caption{\textbf{Calibration (confidence reliability) diagrams for Voting and Debate protocols.} Expected Calibration Error (ECE) is shown in parentheses next to each aggregation method.}
+  \label{fig:calibration_reliability}
+\end{figure}
+
+\begin{table*}[t]
+\centering
+\small
+\begin{threeparttable}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tabular}{lcc|cc|cc|cc|cc}
+\toprule
+\textbf{Dataset:} & \multicolumn{2}{c}{\textbf{CSQA}} & \multicolumn{2}{|c}{\textbf{BoolQ}} & \multicolumn{2}{|c}{\textbf{GSM8K}} & \multicolumn{2}{|c}{\textbf{TruthfulQA}} & \multicolumn{2}{|c}{\textbf{GPQA}} \\
+
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9} \cmidrule(lr){10-11}
+Method & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ \\
+\midrule
+
+\rowcolor{headergray}
+\multicolumn{11}{c}{\textit{Voting Protocol}}\\
+
+\multicolumn{11}{l}{\textit{Baselines}}\\
+CAGE-CAL & -0.13 {\scriptsize $\pm$ 0.59} & +2.81 {\scriptsize $\pm$ 1.07} & -0.01 {\scriptsize $\pm$ 0.25} & \gfirst{+2.89 {\scriptsize $\pm$ 0.27}} & -0.21 {\scriptsize $\pm$ 0.35} & +0.93 {\scriptsize $\pm$ 0.28} & +1.61 {\scriptsize $\pm$ 0.71} & +0.45 {\scriptsize $\pm$ 1.62} & +4.58 {\scriptsize $\pm$ 1.53} & +1.35 {\scriptsize $\pm$ 1.82} \\
+% Judge g3-27i: reasoning (approx.) & -1.63 {\scriptsize $\pm$ 0.77} & +2.75 {\scriptsize $\pm$ 0.77} & -0.10 {\scriptsize $\pm$ 0.38} & +0.29 {\scriptsize $\pm$ 0.72} & -0.25 {\scriptsize $\pm$ 0.59} & -0.44 {\scriptsize $\pm$ 0.73} & +0.44 {\scriptsize $\pm$ 0.66} & +0.75 {\scriptsize $\pm$ 1.12} & +0.49 {\scriptsize $\pm$ 2.26} & +2.22 {\scriptsize $\pm$ 4.28} \\
+LLM Elicited & -1.97 {\scriptsize $\pm$ 0.41} & +4.57 {\scriptsize $\pm$ 0.34} & -0.47 {\scriptsize $\pm$ 0.18} & +1.98 {\scriptsize $\pm$ 0.36} & -0.41 {\scriptsize $\pm$ 0.19} & +0.91 {\scriptsize $\pm$ 0.19} & +0.08 {\scriptsize $\pm$ 0.43} & +3.01 {\scriptsize $\pm$ 0.55} & +0.60 {\scriptsize $\pm$ 0.87} & +1.90 {\scriptsize $\pm$ 1.93} \\
+% Judge l32-3bi: reasoning (approx.) & -0.47 {\scriptsize $\pm$ 0.97} & -1.50 {\scriptsize $\pm$ 1.06} & +0.40 {\scriptsize $\pm$ 0.35} & +0.10 {\scriptsize $\pm$ 0.67} & +0.56 {\scriptsize $\pm$ 0.85} & -0.57 {\scriptsize $\pm$ 0.69} & +2.85 {\scriptsize $\pm$ 0.73} & -5.09 {\scriptsize $\pm$ 1.27} & +0.40 {\scriptsize $\pm$ 1.92} & +0.35 {\scriptsize $\pm$ 3.70} \\
+% Judge l32-3bi: reasoning + confidence (approx.) & -1.02 {\scriptsize $\pm$ 0.95} & +1.48 {\scriptsize $\pm$ 1.22} & +0.39 {\scriptsize $\pm$ 0.35} & +1.61 {\scriptsize $\pm$ 0.76} & +0.60 {\scriptsize $\pm$ 0.88} & -0.36 {\scriptsize $\pm$ 0.62} & +3.17 {\scriptsize $\pm$ 0.83} & -4.85 {\scriptsize $\pm$ 1.92} & +0.34 {\scriptsize $\pm$ 0.82} & +0.40 {\scriptsize $\pm$ 3.53} \\
+\midrule
+\multicolumn{11}{l}{\textit{Probability Space}}\\
+Arithmetic Average* & \gfirst{-2.71 {\scriptsize $\pm$ 0.49}} & +5.32 {\scriptsize $\pm$ 0.60} & -0.77 {\scriptsize $\pm$ 0.18} & +2.67 {\scriptsize $\pm$ 0.37} & \gthird{-1.02 {\scriptsize $\pm$ 0.14}} & \gsecond{+1.38 {\scriptsize $\pm$ 0.17}} & -1.39 {\scriptsize $\pm$ 0.46} & +4.84 {\scriptsize $\pm$ 0.62} & \gthird{-0.47 {\scriptsize $\pm$ 0.70}} & \gfirst{+3.04 {\scriptsize $\pm$ 1.43}} \\
+
+Learned Weighted & \gsecond{-2.56 {\scriptsize $\pm$ 0.46}} & +5.32 {\scriptsize $\pm$ 0.60} & \gfirst{-0.92 {\scriptsize $\pm$ 0.14}} & +2.77 {\scriptsize $\pm$ 0.37} & \gsecond{-1.06 {\scriptsize $\pm$ 0.16}} & +1.38 {\scriptsize $\pm$ 0.17} & \gsecond{-1.77 {\scriptsize $\pm$ 0.43}} & \gsecond{+4.98 {\scriptsize $\pm$ 0.92}} & -0.47 {\scriptsize $\pm$ 0.50} & \gthird{+2.67 {\scriptsize $\pm$ 1.28}} \\
+
+\midrule
+\multicolumn{11}{l}{\textit{Log-odds Space}}\\
+
+Log-odds Sum* & -2.46 {\scriptsize $\pm$ 0.43} & \gfirst{+5.35 {\scriptsize $\pm$ 0.61}} & -0.59 {\scriptsize $\pm$ 0.19} & +2.68 {\scriptsize $\pm$ 0.37} & -1.00 {\scriptsize $\pm$ 0.15} & \gthird{+1.38 {\scriptsize $\pm$ 0.17}} & -1.22 {\scriptsize $\pm$ 0.40} & \gthird{+4.96 {\scriptsize $\pm$ 0.63}} & -0.15 {\scriptsize $\pm$ 0.77} & +2.51 {\scriptsize $\pm$ 1.42} \\
+
+Full Covariance & -2.41 {\scriptsize $\pm$ 0.47} & +5.31 {\scriptsize $\pm$ 0.60} & -0.83 {\scriptsize $\pm$ 0.14} & \gsecond{+2.77 {\scriptsize $\pm$ 0.37}} & -0.87 {\scriptsize $\pm$ 0.14} & +1.26 {\scriptsize $\pm$ 0.22} & \gthird{-1.65 {\scriptsize $\pm$ 0.45}} & +4.51 {\scriptsize $\pm$ 1.31} & \gsecond{-0.50 {\scriptsize $\pm$ 0.49}} & +2.40 {\scriptsize $\pm$ 1.55} \\
+
+Diagonal Covariance & \gthird{-2.55 {\scriptsize $\pm$ 0.49}} & \gsecond{+5.35 {\scriptsize $\pm$ 0.61}} & \gsecond{-0.86 {\scriptsize $\pm$ 0.14}} & \gthird{+2.77 {\scriptsize $\pm$ 0.37}} & -0.93 {\scriptsize $\pm$ 0.13} & \gfirst{+1.39 {\scriptsize $\pm$ 0.17}} & \gfirst{-1.95 {\scriptsize $\pm$ 0.46}} & \gfirst{+5.40 {\scriptsize $\pm$ 0.62}} & \gfirst{-0.51 {\scriptsize $\pm$ 0.50}} & +2.32 {\scriptsize $\pm$ 1.47} \\
+
+Learned Weights & -2.49 {\scriptsize $\pm$ 0.48} & \gthird{+5.33 {\scriptsize $\pm$ 0.61}} & \gthird{-0.86 {\scriptsize $\pm$ 0.15}} & +2.77 {\scriptsize $\pm$ 0.37} & \gfirst{-1.07 {\scriptsize $\pm$ 0.16}} & +1.38 {\scriptsize $\pm$ 0.17} & -1.55 {\scriptsize $\pm$ 0.45} & +4.23 {\scriptsize $\pm$ 1.31} & -0.24 {\scriptsize $\pm$ 0.61} & \gsecond{+2.99 {\scriptsize $\pm$ 1.88}} \\
+
+\midrule
+\rowcolor{headergray}
+\multicolumn{11}{c}{\textit{Debate Protocol}}\\
+
+\multicolumn{11}{l}{\textit{Baselines}}\\
+CAGE-CAL & -0.34 {\scriptsize $\pm$ 0.50} & +5.03 {\scriptsize $\pm$ 0.96} & -1.13 {\scriptsize $\pm$ 0.15} & +4.23 {\scriptsize $\pm$ 0.29} & -0.10 {\scriptsize $\pm$ 0.22} & +1.72 {\scriptsize $\pm$ 0.19} & +1.04 {\scriptsize $\pm$ 0.72} & +3.87 {\scriptsize $\pm$ 1.34} & +5.35 {\scriptsize $\pm$ 2.48} & +2.26 {\scriptsize $\pm$ 1.40} \\
+LLM Elicited & -0.34 {\scriptsize $\pm$ 0.50} & +5.03 {\scriptsize $\pm$ 0.96} & -1.13 {\scriptsize $\pm$ 0.15} & +4.23 {\scriptsize $\pm$ 0.29} & -0.10 {\scriptsize $\pm$ 0.22} & +1.72 {\scriptsize $\pm$ 0.19} & +1.04 {\scriptsize $\pm$ 0.72} & +3.87 {\scriptsize $\pm$ 1.34} & +5.35 {\scriptsize $\pm$ 2.48} & +2.26 {\scriptsize $\pm$ 1.40} \\
+\midrule
+\multicolumn{11}{l}{\textit{Probability Space}}\\
+Arithmetic Average* & \gfirst{-2.81 {\scriptsize $\pm$ 0.37}} & \gthird{+7.54 {\scriptsize $\pm$ 0.39}} & -1.56 {\scriptsize $\pm$ 0.18} & +4.38 {\scriptsize $\pm$ 0.39} & \gfirst{-0.65 {\scriptsize $\pm$ 0.25}} & \gthird{+2.25 {\scriptsize $\pm$ 0.17}} & \gthird{-1.55 {\scriptsize $\pm$ 0.43}} & \gthird{+7.37 {\scriptsize $\pm$ 0.81}} & \gfirst{-0.94 {\scriptsize $\pm$ 0.67}} & \gsecond{+5.67 {\scriptsize $\pm$ 0.92}} \\
+Learned Weighted & \gthird{-2.68 {\scriptsize $\pm$ 0.45}} & +7.51 {\scriptsize $\pm$ 0.38} & \gfirst{-2.03 {\scriptsize $\pm$ 0.21}} & \gsecond{+4.72 {\scriptsize $\pm$ 0.27}} & \gsecond{-0.65 {\scriptsize $\pm$ 0.26}} & \gsecond{+2.27 {\scriptsize $\pm$ 0.18}} & \gsecond{-1.66 {\scriptsize $\pm$ 0.50}} & +7.25 {\scriptsize $\pm$ 0.91} & -0.03 {\scriptsize $\pm$ 0.72} & +4.66 {\scriptsize $\pm$ 1.65} \\
+
+\midrule
+\multicolumn{11}{l}{\textit{Logit Space}}\\
+Log-odds sum* & -1.79 {\scriptsize $\pm$ 0.46} & \gsecond{+7.58 {\scriptsize $\pm$ 0.39}} & -1.00 {\scriptsize $\pm$ 0.27} & +4.41 {\scriptsize $\pm$ 0.37} & -0.41 {\scriptsize $\pm$ 0.28} & +2.25 {\scriptsize $\pm$ 0.17} & -0.60 {\scriptsize $\pm$ 0.52} & \gsecond{+7.45 {\scriptsize $\pm$ 0.82}} & -0.52 {\scriptsize $\pm$ 0.96} & \gthird{+5.32 {\scriptsize $\pm$ 0.95}} \\
+Full Covariance & -2.48 {\scriptsize $\pm$ 0.49} & +7.10 {\scriptsize $\pm$ 0.37} & \gsecond{-1.93 {\scriptsize $\pm$ 0.22}} & \gthird{+4.51 {\scriptsize $\pm$ 0.32}} & -0.44 {\scriptsize $\pm$ 0.30} & +2.11 {\scriptsize $\pm$ 0.25} & -1.45 {\scriptsize $\pm$ 0.57} & +6.28 {\scriptsize $\pm$ 1.43} & \gthird{-0.57 {\scriptsize $\pm$ 0.49}} & +4.93 {\scriptsize $\pm$ 1.64} \\
+Diagonal Covariance & \gsecond{-2.68 {\scriptsize $\pm$ 0.43}} & \gfirst{+7.69 {\scriptsize $\pm$ 0.41}} & -1.77 {\scriptsize $\pm$ 0.22} & \gfirst{+4.79 {\scriptsize $\pm$ 0.27}} & -0.52 {\scriptsize $\pm$ 0.23} & \gfirst{+2.28 {\scriptsize $\pm$ 0.16}} & \gfirst{-1.86 {\scriptsize $\pm$ 0.43}} & \gfirst{+7.75 {\scriptsize $\pm$ 0.81}} & \gsecond{-0.74 {\scriptsize $\pm$ 0.42}} & \gfirst{+5.71 {\scriptsize $\pm$ 1.24}} \\
+
+Learned Weights & -2.53 {\scriptsize $\pm$ 0.47} & +6.98 {\scriptsize $\pm$ 0.38} & \gthird{-1.93 {\scriptsize $\pm$ 0.21}} & +4.48 {\scriptsize $\pm$ 0.31} & \gthird{-0.54 {\scriptsize $\pm$ 0.30}} & +2.19 {\scriptsize $\pm$ 0.19} & -1.29 {\scriptsize $\pm$ 0.57} & +6.02 {\scriptsize $\pm$ 1.45} & +0.19 {\scriptsize $\pm$ 0.69} & +5.05 {\scriptsize $\pm$ 2.28} \\
+
+\midrule
+\multicolumn{11}{l}{\textbf{Pooled across both rounds}}\\
+Arithmetic Average* & \gthird{-4.33 {\scriptsize $\pm$ 0.37}} & +10.02 {\scriptsize $\pm$ 0.52} & -2.66 {\scriptsize $\pm$ 0.34} & +6.18 {\scriptsize $\pm$ 0.45} & \gfirst{-1.05 {\scriptsize $\pm$ 0.17}} & \gthird{+3.13 {\scriptsize $\pm$ 0.17}} & \gsecond{-2.18 {\scriptsize $\pm$ 0.56}} & \gthird{+8.55 {\scriptsize $\pm$ 0.80}} & \gfirst{-0.97 {\scriptsize $\pm$ 0.68}} & \gfirst{+8.10 {\scriptsize $\pm$ 1.15}} \\
+Log-odds sum* & -3.30 {\scriptsize $\pm$ 0.58} & \gsecond{+10.06 {\scriptsize $\pm$ 0.52}} & -2.02 {\scriptsize $\pm$ 0.47} & +6.21 {\scriptsize $\pm$ 0.43} & -0.67 {\scriptsize $\pm$ 0.22} & \gsecond{+3.14 {\scriptsize $\pm$ 0.17}} & -1.16 {\scriptsize $\pm$ 0.52} & \gsecond{+8.63 {\scriptsize $\pm$ 0.79}} & -0.40 {\scriptsize $\pm$ 0.81} & \gsecond{+7.87 {\scriptsize $\pm$ 1.17}} \\
+Full Covariance & -4.22 {\scriptsize $\pm$ 0.54} & +9.66 {\scriptsize $\pm$ 0.83} & \gsecond{-3.04 {\scriptsize $\pm$ 0.44}} & +6.31 {\scriptsize $\pm$ 0.51} & -0.78 {\scriptsize $\pm$ 0.20} & +2.74 {\scriptsize $\pm$ 0.39} & -1.79 {\scriptsize $\pm$ 0.76} & +6.80 {\scriptsize $\pm$ 1.30} & +0.46 {\scriptsize $\pm$ 0.74} & +6.37 {\scriptsize $\pm$ 2.23} \\
+Diagonal Covariance & \gsecond{-4.36 {\scriptsize $\pm$ 0.50}} & \gfirst{+10.20 {\scriptsize $\pm$ 0.55}} & -2.93 {\scriptsize $\pm$ 0.43} & \gfirst{+6.59 {\scriptsize $\pm$ 0.36}} & \gthird{-0.93 {\scriptsize $\pm$ 0.18}} & \gfirst{+3.15 {\scriptsize $\pm$ 0.17}} & \gfirst{-2.32 {\scriptsize $\pm$ 0.63}} & \gfirst{+8.84 {\scriptsize $\pm$ 0.78}} & -0.35 {\scriptsize $\pm$ 0.69} & +6.52 {\scriptsize $\pm$ 2.11} \\
+Learned Weights (prob) & \gfirst{-4.40 {\scriptsize $\pm$ 0.49}} & \gthird{+10.06 {\scriptsize $\pm$ 0.66}} & \gfirst{-3.16 {\scriptsize $\pm$ 0.42}} & \gsecond{+6.58 {\scriptsize $\pm$ 0.38}} & \gsecond{-0.98 {\scriptsize $\pm$ 0.18}} & +3.09 {\scriptsize $\pm$ 0.18} & \gthird{-2.13 {\scriptsize $\pm$ 0.73}} & +8.44 {\scriptsize $\pm$ 0.84} & +0.09 {\scriptsize $\pm$ 1.13} & \gthird{+7.31 {\scriptsize $\pm$ 1.45}} \\
+Learned Weights (logit) & -4.24 {\scriptsize $\pm$ 0.53} & +9.56 {\scriptsize $\pm$ 0.90} & \gthird{-3.03 {\scriptsize $\pm$ 0.43}} & \gthird{+6.41 {\scriptsize $\pm$ 0.52}} & -0.88 {\scriptsize $\pm$ 0.21} & +2.58 {\scriptsize $\pm$ 0.52} & -1.62 {\scriptsize $\pm$ 0.80} & +6.38 {\scriptsize $\pm$ 1.32} & +1.76 {\scriptsize $\pm$ 1.30} & +5.15 {\scriptsize $\pm$ 2.21} \\
+
+\bottomrule
+\end{tabular}
+}
+\caption{\textbf{System-level confidence quality across five benchmarks for voting and debate protocols.} Improvements over the accuracy-matched AUARC and the Platt-calibrated Brier score are reported using the single best model in the group as the reference. The higher $\Delta$AUARC and lower $\Delta$p-Brier, the better. The numbers are reported as mean changes compared to the reference over 15 groups of models in different sizes (2-6) $\pm$ 95\% confidence intervals.}
+
+\label{tab:results_main}
+\end{threeparttable}
+\end{table*}
+
+\subsection{Confidence Composition for Voting and Debate Protocols}
+
+\paragraph{Confidence composition yields more discriminative system-level confidence.} 
+
+
+\paragraph{Composed confidences are better probability estimates.}
+
+\paragraph{Dependence and Prior Correction}
+
+\subsection{Varying Number of Agents}
+
+\subsection{Varying Confidence Estimator}
+
+
+% Proposed method set (paper_results/weighting_study): learned weights shrunk toward equal weights,
+% penalty chosen by 5-fold CV on the fitting split with the one-standard-error rule. For review only.
+\begin{table*}[t]
+\centering
+\small
+\begin{threeparttable}
+\resizebox{0.98\textwidth}{!}{%
+\begin{tabular}{lcc|cc|cc|cc|cc}
+\toprule
+\textbf{Dataset:} & \multicolumn{2}{c}{\textbf{CSQA}} & \multicolumn{2}{|c}{\textbf{BoolQ}} & \multicolumn{2}{|c}{\textbf{GSM8K}} & \multicolumn{2}{|c}{\textbf{TruthfulQA}} & \multicolumn{2}{|c}{\textbf{GPQA}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9} \cmidrule(lr){10-11}
+Method & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ & $\Delta$p-Brier $\downarrow$ & $\Delta$AUARC $\uparrow$ \\
+\midrule
+\rowcolor{headergray}
+\multicolumn{11}{c}{\textit{Voting Protocol}}\\
+\multicolumn{11}{l}{\textit{Probability Space}}\\
+Arithmetic Average* & -2.71 {\scriptsize $\pm$ 0.49} & +5.32 {\scriptsize $\pm$ 0.60} & -0.77 {\scriptsize $\pm$ 0.18} & +2.67 {\scriptsize $\pm$ 0.37} & -1.02 {\scriptsize $\pm$ 0.14} & +1.38 {\scriptsize $\pm$ 0.17} & -1.39 {\scriptsize $\pm$ 0.46} & +4.84 {\scriptsize $\pm$ 0.62} & -0.47 {\scriptsize $\pm$ 0.70} & +3.04 {\scriptsize $\pm$ 1.43} \\
+Learned Weights & -2.71 {\scriptsize $\pm$ 0.49} & +5.32 {\scriptsize $\pm$ 0.60} & -0.77 {\scriptsize $\pm$ 0.18} & +2.67 {\scriptsize $\pm$ 0.37} & -1.02 {\scriptsize $\pm$ 0.14} & +1.38 {\scriptsize $\pm$ 0.17} & -1.67 {\scriptsize $\pm$ 0.32} & +5.03 {\scriptsize $\pm$ 0.53} & -0.47 {\scriptsize $\pm$ 0.70} & +3.04 {\scriptsize $\pm$ 1.43} \\
+\midrule
+\multicolumn{11}{l}{\textit{Log-odds Space}}\\
+Log-odds Sum* & -2.46 {\scriptsize $\pm$ 0.43} & +5.35 {\scriptsize $\pm$ 0.61} & -0.59 {\scriptsize $\pm$ 0.19} & +2.68 {\scriptsize $\pm$ 0.38} & -1.00 {\scriptsize $\pm$ 0.15} & +1.38 {\scriptsize $\pm$ 0.17} & -1.22 {\scriptsize $\pm$ 0.40} & +4.96 {\scriptsize $\pm$ 0.63} & -0.15 {\scriptsize $\pm$ 0.77} & +2.51 {\scriptsize $\pm$ 1.42} \\
+Fitted Scale & -2.64 {\scriptsize $\pm$ 0.50} & +5.35 {\scriptsize $\pm$ 0.61} & -0.74 {\scriptsize $\pm$ 0.18} & +2.68 {\scriptsize $\pm$ 0.38} & -1.03 {\scriptsize $\pm$ 0.15} & +1.38 {\scriptsize $\pm$ 0.17} & -1.48 {\scriptsize $\pm$ 0.47} & +4.96 {\scriptsize $\pm$ 0.63} & -0.17 {\scriptsize $\pm$ 0.75} & +2.51 {\scriptsize $\pm$ 1.42} \\
+Learned Weights & -2.64 {\scriptsize $\pm$ 0.50} & +5.35 {\scriptsize $\pm$ 0.61} & -0.74 {\scriptsize $\pm$ 0.18} & +2.68 {\scriptsize $\pm$ 0.38} & -1.03 {\scriptsize $\pm$ 0.15} & +1.38 {\scriptsize $\pm$ 0.17} & -1.73 {\scriptsize $\pm$ 0.35} & +5.12 {\scriptsize $\pm$ 0.56} & -0.17 {\scriptsize $\pm$ 0.76} & +2.51 {\scriptsize $\pm$ 1.42} \\
+\midrule
+\rowcolor{headergray}
+\multicolumn{11}{c}{\textit{Debate Protocol, Round 1 (pooled with round 0)}}\\
+\multicolumn{11}{l}{\textit{Probability Space}}\\
+Arithmetic Average* & -2.81 {\scriptsize $\pm$ 0.37} & +7.54 {\scriptsize $\pm$ 0.39} & -1.56 {\scriptsize $\pm$ 0.18} & +4.38 {\scriptsize $\pm$ 0.39} & -0.65 {\scriptsize $\pm$ 0.25} & +2.25 {\scriptsize $\pm$ 0.17} & -1.55 {\scriptsize $\pm$ 0.43} & +7.37 {\scriptsize $\pm$ 0.81} & -0.94 {\scriptsize $\pm$ 0.67} & +5.67 {\scriptsize $\pm$ 0.92} \\
+Learned Weights & -2.81 {\scriptsize $\pm$ 0.37} & +7.54 {\scriptsize $\pm$ 0.39} & -1.68 {\scriptsize $\pm$ 0.21} & +4.51 {\scriptsize $\pm$ 0.32} & -0.65 {\scriptsize $\pm$ 0.25} & +2.25 {\scriptsize $\pm$ 0.17} & -1.63 {\scriptsize $\pm$ 0.43} & +7.45 {\scriptsize $\pm$ 0.80} & -0.93 {\scriptsize $\pm$ 0.67} & +5.83 {\scriptsize $\pm$ 0.96} \\
+\midrule
+\multicolumn{11}{l}{\textit{Log-odds Space}}\\
+Log-odds Sum* & -1.79 {\scriptsize $\pm$ 0.46} & +7.58 {\scriptsize $\pm$ 0.40} & -1.00 {\scriptsize $\pm$ 0.27} & +4.41 {\scriptsize $\pm$ 0.37} & -0.41 {\scriptsize $\pm$ 0.28} & +2.25 {\scriptsize $\pm$ 0.17} & -0.60 {\scriptsize $\pm$ 0.52} & +7.45 {\scriptsize $\pm$ 0.83} & -0.52 {\scriptsize $\pm$ 0.96} & +5.32 {\scriptsize $\pm$ 0.95} \\
+Fitted Scale & -2.72 {\scriptsize $\pm$ 0.41} & +7.58 {\scriptsize $\pm$ 0.40} & -1.55 {\scriptsize $\pm$ 0.19} & +4.41 {\scriptsize $\pm$ 0.37} & -0.64 {\scriptsize $\pm$ 0.25} & +2.25 {\scriptsize $\pm$ 0.17} & -1.50 {\scriptsize $\pm$ 0.45} & +7.45 {\scriptsize $\pm$ 0.83} & -0.68 {\scriptsize $\pm$ 0.75} & +5.32 {\scriptsize $\pm$ 0.95} \\
+Learned Weights & -2.72 {\scriptsize $\pm$ 0.41} & +7.58 {\scriptsize $\pm$ 0.40} & -1.67 {\scriptsize $\pm$ 0.21} & +4.57 {\scriptsize $\pm$ 0.29} & -0.64 {\scriptsize $\pm$ 0.25} & +2.25 {\scriptsize $\pm$ 0.17} & -1.56 {\scriptsize $\pm$ 0.45} & +7.54 {\scriptsize $\pm$ 0.82} & -0.72 {\scriptsize $\pm$ 0.71} & +5.95 {\scriptsize $\pm$ 1.03} \\
+\midrule
+\rowcolor{headergray}
+\multicolumn{11}{c}{\textit{Debate Protocol, Round 2 (pooled with round 0)}}\\
+\multicolumn{11}{l}{\textit{Probability Space}}\\
+Arithmetic Average* & -4.33 {\scriptsize $\pm$ 0.38} & +10.02 {\scriptsize $\pm$ 0.52} & -2.66 {\scriptsize $\pm$ 0.34} & +6.18 {\scriptsize $\pm$ 0.44} & -1.05 {\scriptsize $\pm$ 0.17} & +3.13 {\scriptsize $\pm$ 0.17} & -2.18 {\scriptsize $\pm$ 0.56} & +8.55 {\scriptsize $\pm$ 0.80} & -0.97 {\scriptsize $\pm$ 0.68} & +8.10 {\scriptsize $\pm$ 1.15} \\
+Learned Weights & -4.33 {\scriptsize $\pm$ 0.38} & +10.02 {\scriptsize $\pm$ 0.52} & -2.91 {\scriptsize $\pm$ 0.41} & +6.45 {\scriptsize $\pm$ 0.35} & -1.05 {\scriptsize $\pm$ 0.17} & +3.13 {\scriptsize $\pm$ 0.17} & -2.24 {\scriptsize $\pm$ 0.57} & +8.55 {\scriptsize $\pm$ 0.77} & -0.94 {\scriptsize $\pm$ 0.67} & +8.26 {\scriptsize $\pm$ 1.14} \\
+\midrule
+\multicolumn{11}{l}{\textit{Log-odds Space}}\\
+Log-odds Sum* & -3.30 {\scriptsize $\pm$ 0.58} & +10.06 {\scriptsize $\pm$ 0.52} & -2.02 {\scriptsize $\pm$ 0.47} & +6.21 {\scriptsize $\pm$ 0.43} & -0.67 {\scriptsize $\pm$ 0.22} & +3.14 {\scriptsize $\pm$ 0.17} & -1.16 {\scriptsize $\pm$ 0.52} & +8.63 {\scriptsize $\pm$ 0.79} & -0.40 {\scriptsize $\pm$ 0.81} & +7.87 {\scriptsize $\pm$ 1.17} \\
+Fitted Scale & -4.29 {\scriptsize $\pm$ 0.41} & +10.06 {\scriptsize $\pm$ 0.52} & -2.65 {\scriptsize $\pm$ 0.37} & +6.21 {\scriptsize $\pm$ 0.43} & -1.01 {\scriptsize $\pm$ 0.17} & +3.14 {\scriptsize $\pm$ 0.17} & -2.13 {\scriptsize $\pm$ 0.56} & +8.63 {\scriptsize $\pm$ 0.79} & -0.76 {\scriptsize $\pm$ 0.78} & +7.87 {\scriptsize $\pm$ 1.17} \\
+Learned Weights & -4.30 {\scriptsize $\pm$ 0.41} & +10.06 {\scriptsize $\pm$ 0.52} & -2.85 {\scriptsize $\pm$ 0.42} & +6.44 {\scriptsize $\pm$ 0.36} & -1.02 {\scriptsize $\pm$ 0.17} & +3.14 {\scriptsize $\pm$ 0.17} & -2.19 {\scriptsize $\pm$ 0.58} & +8.67 {\scriptsize $\pm$ 0.79} & -0.63 {\scriptsize $\pm$ 0.77} & +7.98 {\scriptsize $\pm$ 1.17} \\
+\bottomrule
+\end{tabular}
+}
+\caption{\textbf{Proposed method set (for review).} Learned weights shrink toward equal weights, with the shrinkage chosen by cross-validation on the fitting split; with no evidence for unequal weights they reduce to the arithmetic average (probability space) or the fitted scale (log-odds space). Mean change against the best single model over 15 groups $\pm$ 95\% confidence interval.}
+\label{tab:results_proposed}
+\end{threeparttable}
+\end{table*}

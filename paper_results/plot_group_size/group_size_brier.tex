@@ -1,0 +1,33 @@
+% Needs in the preamble: \usepackage{pgfplots} \usepgfplotslibrary{groupplots} \pgfplotsset{compat=1.17}
+\definecolor{gsvoting}{HTML}{2A78D6}
+\definecolor{gsdebater1}{HTML}{EB6834}
+\definecolor{gsdebater2}{HTML}{1BAF7A}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=1.1cm},
+  scale only axis, width=0.25\textwidth, height=0.18\textwidth,
+  xmin=1.6, xmax=6.4, xtick={2,3,4,5,6},
+  axis line style={black!55, line width=0.4pt}, tick style={black!55, line width=0.4pt}, tick align=inside,
+  tick label style={font=\tiny, black!70}, label style={font=\scriptsize},
+  ymajorgrids, grid style={black!7, line width=0.3pt},
+  xlabel={Number of Agents in Group}, title style={font=\footnotesize, yshift=-3pt},
+  every axis plot/.append style={line width=0.7pt, mark size=1.4pt}]
+\nextgroupplot[title={CSQA}, ymin=-4.877, ymax=0.361, ylabel={$\Delta$ p-Brier}]
+\addplot[black!45, dashed, line width=0.4pt, forget plot] coordinates {(1.6,0) (6.4,0)};
+\addplot[color=gsvoting, mark=*, mark options={draw=white, line width=0.25pt, fill=gsvoting}] coordinates {(2,-1.5366) (3,-2.4006) (4,-3.1694) (5,-2.7617) (6,-3.0332)};
+\addplot[color=gsdebater1, mark=square*, mark options={draw=white, line width=0.25pt, fill=gsdebater1}] coordinates {(2,-2.2419) (3,-1.5117) (4,-2.4530) (5,-1.1525) (6,-1.0987)};
+\addplot[color=gsdebater2, mark=triangle*, mark size=2pt, mark options={draw=white, line width=0.25pt, fill=gsdebater2}] coordinates {(2,-4.5157) (3,-2.8523) (4,-3.6683) (5,-2.4802) (6,-2.0204)};
+\nextgroupplot[title={GSM8K}, ymin=-1.363, ymax=0.232, legend columns=3, legend style={at={(0.5,1.16)}, anchor=south, draw=none, fill=none, font=\small, /tikz/every even column/.append style={column sep=8pt}}]
+\addplot[black!45, dashed, line width=0.4pt, forget plot] coordinates {(1.6,0) (6.4,0)};
+\addplot[color=gsvoting, mark=*, mark options={draw=white, line width=0.25pt, fill=gsvoting}] coordinates {(2,-0.7268) (3,-0.9801) (4,-1.1112) (5,-1.2529) (6,-1.1884)};
+\addlegendentry{Voting}
+\addplot[color=gsdebater1, mark=square*, mark options={draw=white, line width=0.25pt, fill=gsdebater1}] coordinates {(2,-1.0477) (3,-0.4674) (4,-0.1819) (5,0.0690) (6,0.1218)};
+\addlegendentry{Debate, Round 1}
+\addplot[color=gsdebater2, mark=triangle*, mark size=2pt, mark options={draw=white, line width=0.25pt, fill=gsdebater2}] coordinates {(2,-1.1110) (3,-0.7584) (4,-0.2808) (5,-0.3652) (6,-0.5157)};
+\addlegendentry{Debate, Round 2}
+\nextgroupplot[title={TruthfulQA}, ymin=-2.256, ymax=0.167]
+\addplot[black!45, dashed, line width=0.4pt, forget plot] coordinates {(1.6,0) (6.4,0)};
+\addplot[color=gsvoting, mark=*, mark options={draw=white, line width=0.25pt, fill=gsvoting}] coordinates {(2,-0.5014) (3,-1.3389) (4,-1.8776) (5,-1.4718) (6,-1.1987)};
+\addplot[color=gsdebater1, mark=square*, mark options={draw=white, line width=0.25pt, fill=gsdebater1}] coordinates {(2,-1.6882) (3,-0.2722) (4,-0.3416) (5,-0.0016) (6,-0.0835)};
+\addplot[color=gsdebater2, mark=triangle*, mark size=2pt, mark options={draw=white, line width=0.25pt, fill=gsdebater2}] coordinates {(2,-2.0890) (3,-1.3237) (4,-0.5278) (5,-0.2306) (6,-0.8353)};
+\end{groupplot}
+\end{tikzpicture}

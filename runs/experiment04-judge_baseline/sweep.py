@@ -39,6 +39,9 @@ def parse_args():
     parser.add_argument("--voter", type=int, default=0)
     parser.add_argument("--match", default="_cs7s")
     parser.add_argument("--split", default="test")
+    parser.add_argument("--rounds", nargs="+", type=int, default=[0],
+                        help="0: independent answers; 1, 2: the panel after that debate round")
+    parser.add_argument("--debate-store", default=str(jrun.DEBATE_STORE))
     parser.add_argument("--limit", type=int, help="first N examples; omit for the whole split")
     parser.add_argument("--word-limit", type=int, default=150)
     parser.add_argument("--max-tokens", type=int, default=512)
@@ -53,19 +56,24 @@ def parse_args():
 
 
 def plan(args):
-    """One entry per saved cell: judge, task, panel, and the single signal shown."""
+    """One entry per saved cell: judge, round, task, panel, and the single signal shown."""
     panels = [p for p in PANELS if not args.panel_sizes or len(p) in args.panel_sizes]
     arms = ([] if args.no_control else [("reasoning", args.methods[0])]) \
         + [("reasoning_confidence", method) for method in args.methods]
-    return [(judge, task, panel, view, method)
-            for judge in args.judges for task in args.tasks
+    return [(judge, round_index, task, panel, view, method)
+            for judge in args.judges for round_index in args.rounds for task in args.tasks
             for panel in panels for view, method in arms]
 
 
-def case(args, judge, task, panel, view, method):
-    return Namespace(**{**vars(args), "judge": judge, "task": task,
+def case(args, judge, round_index, task, panel, view, method):
+    return Namespace(**{**vars(args), "judge": judge, "round": round_index, "task": task,
                         "panel": [f"vllm/{model}" for model in panel],
                         "view": view, "confidence_method": method})
+
+
+def cell_dir(args, entry):
+    run = case(args, *entry)
+    return jrun.output_root(run) / run.task / jrun._cell(run)
 
 
 def complete(cell):
@@ -74,8 +82,12 @@ def complete(cell):
     return path.exists() and json.loads(path.read_text()).get("context") == jrun.JUDGE_CONTEXT
 
 
-def split_size(args, task):
+def split_size(args, task, round_index=0):
     """Examples one run of this task will judge, read off a panel cell without loading it."""
+    if round_index:
+        path = next(Path(args.debate_store, task).glob(f"*/round_{round_index}/*.jsonl"))
+        size = sum(1 for line in path.open() if line.strip())
+        return min(size, args.limit) if args.limit else size
     path = next(p for p in sorted(Path(args.store, task).glob(f"*/{args.split}.jsonl"))
                 if args.match in p.parent.name and f"v{args.voter}_" in p.parent.name)
     size = sum(1 for line in path.open() if line.strip())
@@ -145,23 +157,26 @@ def main():
     args = parse_args()
     out, logfile = Path(args.out_dir), Path(args.log)
     if args.collect:
-        rows = collect(out)
-        print(f"{len(rows)} cell(s) -> {out / 'summary.csv'}")
+        for round_index in args.rounds:
+            root = jrun.output_root(Namespace(out_dir=args.out_dir, round=round_index))
+            print(f"{len(collect(root))} cell(s) -> {root / 'summary.csv'}")
         return
 
     work = plan(args)
-    pending = [c for c in work if args.force or not complete(out / c[1] / jrun._cell(case(args, *c)))]
-    sizes = {task: split_size(args, task) for task in args.tasks}
-    total = sum(sizes[c[1]] for c in pending)
+    pending = [c for c in work if args.force or not complete(cell_dir(args, c))]
+    sizes = {(round_index, task): split_size(args, task, round_index)
+             for round_index in args.rounds for task in args.tasks}
+    total = sum(sizes[c[1], c[2]] for c in pending)
     header = (f"{len(work)} run(s) planned, {len(work) - len(pending)} complete, {len(pending)} to go "
               f"({total:,} judged examples)")
     print(header)
     if args.dry_run or not pending:
-        for judge, task, panel, view, method in pending:
-            print(f"  {judge:<14}{task:<12}{'+'.join(panel):<46}{view:<22}{method}")
+        for judge, round_index, task, panel, view, method in pending:
+            print(f"  {judge:<14}r{round_index}  {task:<12}{'+'.join(panel):<46}{view:<22}{method}")
         return
 
-    log(logfile, f"{'=' * 78}\nLAUNCH   judges={','.join(args.judges)} tasks={','.join(args.tasks)} "
+    log(logfile, f"{'=' * 78}\nLAUNCH   judges={','.join(args.judges)} rounds={','.join(map(str, args.rounds))} "
+                 f"tasks={','.join(args.tasks)} "
                  f"methods={','.join(args.methods)} limit={args.limit or 'full'} "
                  f"context={jrun.JUDGE_CONTEXT}\n         {header}")
     out.mkdir(parents=True, exist_ok=True)
@@ -171,7 +186,7 @@ def main():
             batch = [c for c in pending if c[0] == judge]
             if not batch:
                 continue
-            left = sum(sizes[c[1]] for c in batch)
+            left = sum(sizes[c[1], c[2]] for c in batch)
             print(f"\n{'#' * 78}\n# loading judge {judge} for {len(batch)} run(s)\n{'#' * 78}")
             log(logfile, f"JUDGE    {judge}: loading for {len(batch)} run(s), {left:,} examples")
             try:
@@ -182,16 +197,17 @@ def main():
                 traceback.print_exc()
                 continue
             judged, busy = 0, 0.0
-            for judge_name, task, panel, view, method in batch:
+            for entry in batch:
+                judge_name, round_index, task, panel, view, method = entry
                 done += 1
-                label = f"{judge_name} {task} {'+'.join(panel)} {view} {method}"
+                label = f"{judge_name} r{round_index} {task} {'+'.join(panel)} {view} {method}"
                 print(f"\n{'=' * 78}\n[{done}/{len(pending)}] {label}")
                 log(logfile, f"START    [{done}/{len(pending)}] {label}")
                 tick = time.time()
                 try:
-                    row = jrun.judge_once(case(args, judge_name, task, panel, view, method), llm)
+                    row = jrun.judge_once(case(args, *entry), llm)
                     rows.append(row)
-                    judged += sizes[task]
+                    judged += sizes[round_index, task]
                     busy += time.time() - tick
                     status = (f"OK       [{done}/{len(pending)}] n={row['n']} acc={row['majority_acc']:.3f} "
                               f"auroc={row.get('verbalized_auroc') or float('nan'):.3f} "
@@ -207,17 +223,17 @@ def main():
                     status = (f"CRASH    [{done}/{len(pending)}] {type(error).__name__}: {error}\n"
                               + traceback.format_exc().rstrip())
                 # Rate counts only finished runs, so a crash that fails in a second cannot shorten the ETA.
-                left -= sizes[task]
+                left -= sizes[round_index, task]
                 eta = clock(left / (judged / busy)) if judged and busy else "?"
                 log(logfile, f"{status}   {clock(time.time() - tick)}   eta this judge {eta}")
-                collect(out)
+                collect(jrun.output_root(case(args, *entry)))
             del llm
     except KeyboardInterrupt:
         log(logfile, "STOPPED  interrupted by the user")
         print("\ninterrupted")
     finally:
         summarise(logfile, args, pending, rows, failures, started)
-        print(f"summary.csv -> {out / 'summary.csv'}   log -> {logfile}")
+        print(f"summary.csv per round under {out}   log -> {logfile}")
 
 
 if __name__ == "__main__":

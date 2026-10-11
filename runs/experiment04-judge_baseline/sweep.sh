@@ -9,6 +9,7 @@
 # Usage: bash runs/experiment04-judge_baseline/sweep.sh          start, detached
 #        bash runs/experiment04-judge_baseline/sweep.sh stop     stop a running sweep
 #   TASKS="gpqa csqa"   JUDGES="vllm/g3-27i"   SIZES="2 3"   FORCE=1 redo complete cells
+#   ROUNDS="1 2" judge the panel after those debate rounds (read from results/debate_inferences)
 #   EXTRA="--dry-run" print the plan       EXTRA="--no-control" drop the control arm      FOREGROUND=1
 set -uo pipefail
 cd "$(dirname "$0")/../.."
@@ -19,6 +20,7 @@ RUN_LOG=$LOG_DIR/current_run.log
 PIDFILE=$LOG_DIR/run.pid
 JUDGES=${JUDGES:-"vllm/g3-27i vllm/l32-3bi"}
 TASKS=${TASKS:-"gpqa truthfulqa csqa gsm8k boolq"}
+ROUNDS=${ROUNDS:-0}
 mkdir -p "$LOG_DIR"
 
 note() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" >> "$RUN_LOG"; }
@@ -53,7 +55,7 @@ if [ -z "${SWEEP_DETACHED:-}" ] && [ "${FOREGROUND:-0}" != "1" ]; then
     echo "already running as pid $(cut -d' ' -f1 "$PIDFILE"); stop it first" >&2; exit 1
   fi
   rm -f "$PIDFILE" "$LOG_DIR/DONE"
-  export SWEEP_DETACHED=1 JUDGES TASKS SIZES="${SIZES:-}" EXTRA="${EXTRA:-}" FORCE="${FORCE:-}"
+  export SWEEP_DETACHED=1 JUDGES TASKS ROUNDS SIZES="${SIZES:-}" EXTRA="${EXTRA:-}" FORCE="${FORCE:-}"
   if command -v setsid > /dev/null 2>&1; then
     setsid bash "$0" < /dev/null > "$LOG_DIR/run.log" 2>&1 &
   else
@@ -73,7 +75,7 @@ echo "$$ $(ps -o pgid= -p $$ | tr -d ' ')" > "$PIDFILE"
 trap 'note "SHELL    received a signal, exiting"; echo stopped > "$LOG_DIR/DONE"; rm -f "$PIDFILE"; exit 143' INT TERM
 
 note "$(printf '=%.0s' {1..78})"
-note "SHELL    sweep.sh starting (pid $$): judges=$JUDGES tasks=$TASKS"
+note "SHELL    sweep.sh starting (pid $$): judges=$JUDGES rounds=$ROUNDS tasks=$TASKS"
 
 STATUS=0
 for JUDGE in $JUDGES; do
@@ -81,7 +83,7 @@ for JUDGE in $JUDGES; do
   echo "################ $JUDGE  ->  $LOG"
   note "SHELL    launching $JUDGE, stdout at $LOG"
   python runs/experiment04-judge_baseline/sweep.py \
-    --judges "$JUDGE" --tasks $TASKS --log "$RUN_LOG" \
+    --judges "$JUDGE" --rounds $ROUNDS --tasks $TASKS --log "$RUN_LOG" \
     ${SIZES:+--panel-sizes $SIZES} ${FORCE:+--force} ${EXTRA:-} 2>&1 | tee -a "$LOG"
   CODE=${PIPESTATUS[0]}
   if [ "$CODE" -ne 0 ]; then

@@ -1,0 +1,40 @@
+\begin{table*}[t]
+\centering
+\caption{Confidence quality after one debate round. Entries are mean $\pm$ sample SD of group-level method-minus-reference differences, in points ($\times 100$). Differences are computed before averaging across 15 groups per dataset (14 for logistic pooling on BoolQ). Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use one fitted temperature.}
+\label{tab:debate-consistency-delta}
+\setlength{\tabcolsep}{2.6pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{CSQA} & \multicolumn{2}{c}{BOOLQ} & \multicolumn{2}{c}{GSM8K} & \multicolumn{2}{c}{TRUTHFULQA} & \multicolumn{2}{c}{GPQA} \\
+Method & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ \\
+\midrule
+\multicolumn{11}{l}{\textbf{Reference}}\\
+Reference (fitting accuracy) & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} \\
+\midrule
+\multicolumn{11}{l}{\textbf{No learned combination weights}}\\
+Arithmetic mean & -1.68 {\scriptsize $\pm$ 0.93} & +4.30 {\scriptsize $\pm$ 1.17} & -0.69 {\scriptsize $\pm$ 0.75} & +1.49 {\scriptsize $\pm$ 1.04} & -0.26 {\scriptsize $\pm$ 0.32} & +1.26 {\scriptsize $\pm$ 0.42} & -1.03 {\scriptsize $\pm$ 0.95} & +4.97 {\scriptsize $\pm$ 2.41} & -0.30 {\scriptsize $\pm$ 0.55} & +3.12 {\scriptsize $\pm$ 1.75} \\
+Log-odds sum & -1.58 {\scriptsize $\pm$ 0.95} & +4.32 {\scriptsize $\pm$ 1.19} & -0.76 {\scriptsize $\pm$ 0.70} & +1.52 {\scriptsize $\pm$ 1.00} & -0.26 {\scriptsize $\pm$ 0.29} & +1.27 {\scriptsize $\pm$ 0.42} & -0.91 {\scriptsize $\pm$ 0.92} & +5.00 {\scriptsize $\pm$ 2.42} & -0.32 {\scriptsize $\pm$ 0.57} & +3.15 {\scriptsize $\pm$ 1.69} \\
+\midrule
+\multicolumn{11}{l}{\textbf{External baseline}}\\
+CAGE-CAL (paired debate) & -1.27 {\scriptsize $\pm$ 1.03} & +5.03 {\scriptsize $\pm$ 1.90} & -1.74 {\scriptsize $\pm$ 0.66} & +4.23 {\scriptsize $\pm$ 0.57} & -0.26 {\scriptsize $\pm$ 0.24} & +1.72 {\scriptsize $\pm$ 0.38} & -0.26 {\scriptsize $\pm$ 0.92} & +3.87 {\scriptsize $\pm$ 2.64} & +5.06 {\scriptsize $\pm$ 5.67} & +2.26 {\scriptsize $\pm$ 2.76} \\
+\midrule
+\multicolumn{11}{l}{\textbf{Learned per-model weights}}\\
+Kahn (full covariance) & -1.42 {\scriptsize $\pm$ 0.94} & +4.15 {\scriptsize $\pm$ 1.23} & -0.91 {\scriptsize $\pm$ 0.66} & +2.14 {\scriptsize $\pm$ 0.80} & +0.34 {\scriptsize $\pm$ 0.49} & +1.13 {\scriptsize $\pm$ 0.55} & -1.10 {\scriptsize $\pm$ 0.90} & +5.03 {\scriptsize $\pm$ 2.33} & -0.20 {\scriptsize $\pm$ 2.15} & +2.87 {\scriptsize $\pm$ 2.35} \\
+Kahn (diagonal covariance) & -1.07 {\scriptsize $\pm$ 1.06} & +4.45 {\scriptsize $\pm$ 1.25} & -0.45 {\scriptsize $\pm$ 0.49} & +2.16 {\scriptsize $\pm$ 0.79} & +0.73 {\scriptsize $\pm$ 0.62} & +1.29 {\scriptsize $\pm$ 0.41} & -0.58 {\scriptsize $\pm$ 0.87} & +5.17 {\scriptsize $\pm$ 2.43} & -0.19 {\scriptsize $\pm$ 2.34} & +3.46 {\scriptsize $\pm$ 2.32} \\
+Weighted BLP & -1.63 {\scriptsize $\pm$ 0.88} & +4.36 {\scriptsize $\pm$ 1.20} & -1.18 {\scriptsize $\pm$ 0.72} & +1.93 {\scriptsize $\pm$ 0.60} & -0.24 {\scriptsize $\pm$ 0.25} & +1.27 {\scriptsize $\pm$ 0.41} & -1.29 {\scriptsize $\pm$ 1.01} & +5.13 {\scriptsize $\pm$ 2.35} & +0.08 {\scriptsize $\pm$ 2.24} & +2.91 {\scriptsize $\pm$ 2.42} \\
+Regularized logistic pooling & -1.53 {\scriptsize $\pm$ 0.90} & +4.11 {\scriptsize $\pm$ 1.22} & -1.17 {\scriptsize $\pm$ 0.74} & +2.13 {\scriptsize $\pm$ 0.78} & -0.21 {\scriptsize $\pm$ 0.25} & +1.23 {\scriptsize $\pm$ 0.43} & -1.17 {\scriptsize $\pm$ 0.88} & +5.00 {\scriptsize $\pm$ 2.31} & -0.05 {\scriptsize $\pm$ 2.19} & +2.69 {\scriptsize $\pm$ 2.41} \\
+\midrule
+\multicolumn{11}{l}{\textbf{Pooled across both rounds}}\\
+Arithmetic mean (both rounds) & \gfirst{-3.04 {\scriptsize $\pm$ 0.91}} & \gthird{+7.54 {\scriptsize $\pm$ 0.77}} & -2.08 {\scriptsize $\pm$ 0.64} & +4.38 {\scriptsize $\pm$ 0.77} & \gsecond{-0.62 {\scriptsize $\pm$ 0.49}} & \gthird{+2.25 {\scriptsize $\pm$ 0.34}} & \gsecond{-1.65 {\scriptsize $\pm$ 0.82}} & \gthird{+7.37 {\scriptsize $\pm$ 1.61}} & \gthird{-0.57 {\scriptsize $\pm$ 0.50}} & \gsecond{+5.67 {\scriptsize $\pm$ 1.82}} \\
+Log-odds sum (both rounds) & -2.71 {\scriptsize $\pm$ 0.95} & \gsecond{+7.58 {\scriptsize $\pm$ 0.78}} & -1.91 {\scriptsize $\pm$ 0.67} & +4.41 {\scriptsize $\pm$ 0.74} & -0.55 {\scriptsize $\pm$ 0.54} & +2.25 {\scriptsize $\pm$ 0.34} & \gthird{-1.33 {\scriptsize $\pm$ 0.86}} & \gsecond{+7.45 {\scriptsize $\pm$ 1.63}} & -0.36 {\scriptsize $\pm$ 0.62} & \gthird{+5.32 {\scriptsize $\pm$ 1.88}} \\
+Kahn (full covariance) (both rounds) & -2.59 {\scriptsize $\pm$ 1.15} & +7.10 {\scriptsize $\pm$ 0.73} & \gthird{-2.24 {\scriptsize $\pm$ 0.73}} & \gthird{+4.51 {\scriptsize $\pm$ 0.63}} & +0.28 {\scriptsize $\pm$ 0.74} & +2.11 {\scriptsize $\pm$ 0.50} & -1.29 {\scriptsize $\pm$ 1.21} & +6.28 {\scriptsize $\pm$ 2.82} & \gsecond{-0.77 {\scriptsize $\pm$ 1.87}} & +4.93 {\scriptsize $\pm$ 3.24} \\
+Kahn (diagonal covariance) (both rounds) & -1.44 {\scriptsize $\pm$ 1.39} & \gfirst{+7.69 {\scriptsize $\pm$ 0.81}} & -1.24 {\scriptsize $\pm$ 0.74} & \gfirst{+4.79 {\scriptsize $\pm$ 0.54}} & +1.04 {\scriptsize $\pm$ 1.06} & \gfirst{+2.28 {\scriptsize $\pm$ 0.32}} & -0.16 {\scriptsize $\pm$ 1.58} & \gfirst{+7.75 {\scriptsize $\pm$ 1.61}} & \gfirst{-1.02 {\scriptsize $\pm$ 1.86}} & \gfirst{+5.71 {\scriptsize $\pm$ 2.46}} \\
+Weighted BLP (both rounds) & \gsecond{-3.00 {\scriptsize $\pm$ 0.99}} & +7.51 {\scriptsize $\pm$ 0.76} & \gfirst{-2.60 {\scriptsize $\pm$ 0.68}} & \gsecond{+4.72 {\scriptsize $\pm$ 0.54}} & \gfirst{-0.67 {\scriptsize $\pm$ 0.47}} & \gsecond{+2.27 {\scriptsize $\pm$ 0.35}} & \gfirst{-1.69 {\scriptsize $\pm$ 1.03}} & +7.25 {\scriptsize $\pm$ 1.79} & -0.25 {\scriptsize $\pm$ 2.08} & +4.66 {\scriptsize $\pm$ 3.26} \\
+Regularized logistic pooling (both rounds) & \gthird{-2.85 {\scriptsize $\pm$ 1.04}} & +6.98 {\scriptsize $\pm$ 0.76} & \gsecond{-2.50 {\scriptsize $\pm$ 0.66}} & +4.48 {\scriptsize $\pm$ 0.61} & \gthird{-0.58 {\scriptsize $\pm$ 0.53}} & +2.19 {\scriptsize $\pm$ 0.38} & -1.33 {\scriptsize $\pm$ 1.10} & +6.02 {\scriptsize $\pm$ 2.87} & +0.00 {\scriptsize $\pm$ 2.21} & +5.05 {\scriptsize $\pm$ 4.51} \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{2pt}
+\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split initial-answer accuracy, with panel-order ties. Temperature calibration is fitted on fitting data (CAGE-CAL: its internal validation); AUARC uses original rankings. Both-rounds rows pool every member\'s round-0 and post-debate confidence in the final answer, the inputs CAGE-CAL also receives. Reference deltas are zero by definition. The BetaSB variant remains in detailed results.}
+\end{table*}

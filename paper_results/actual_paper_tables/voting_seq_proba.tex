@@ -1,0 +1,38 @@
+\begin{table*}[t]
+\centering
+\caption{Voting confidence quality with seq scores. Each entry is the mean $\pm$ sample SD of the 15 group-level method-minus-reference differences, in points ($\times 100$). Differences are computed within each group before averaging. Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use one fitted output temperature.}
+\label{tab:voting-seq-delta}
+\setlength{\tabcolsep}{2.6pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{CSQA} & \multicolumn{2}{c}{BoolQ} & \multicolumn{2}{c}{GSM8K} & \multicolumn{2}{c}{TruthfulQA} & \multicolumn{2}{c}{GPQA} \\
+Method & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ & $\Delta$t-Brier $\downarrow$ & $\Delta$AUARC (same answer) $\uparrow$ \\
+\midrule
+\multicolumn{11}{l}{\textbf{Reference}}\\
+Reference (fitting accuracy) & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} & +0.00 {\scriptsize $\pm$ 0.00} \\
+\midrule
+\multicolumn{11}{l}{\textbf{No learned combination weights}}\\
+Arithmetic mean & -1.64 {\scriptsize $\pm$ 1.57} & +1.68 {\scriptsize $\pm$ 1.18} & -0.05 {\scriptsize $\pm$ 0.68} & +0.38 {\scriptsize $\pm$ 0.82} & +0.36 {\scriptsize $\pm$ 0.66} & \gfirst{+0.08 {\scriptsize $\pm$ 0.06}} & -0.11 {\scriptsize $\pm$ 0.97} & -0.36 {\scriptsize $\pm$ 0.68} & \gsecond{-0.50 {\scriptsize $\pm$ 0.64}} & \gthird{-0.95 {\scriptsize $\pm$ 2.44}} \\
+Log-odds sum & -1.57 {\scriptsize $\pm$ 1.58} & \gthird{+2.03 {\scriptsize $\pm$ 1.14}} & +0.00 {\scriptsize $\pm$ 0.66} & +0.24 {\scriptsize $\pm$ 0.89} & +2.83 {\scriptsize $\pm$ 1.32} & -0.02 {\scriptsize $\pm$ 0.06} & -0.89 {\scriptsize $\pm$ 0.98} & +0.46 {\scriptsize $\pm$ 0.73} & \gfirst{-0.61 {\scriptsize $\pm$ 0.63}} & \gsecond{-0.25 {\scriptsize $\pm$ 2.03}} \\
+\midrule
+\multicolumn{11}{l}{\textbf{External baseline}}\\
+CAGE-CAL (IID) & -1.04 {\scriptsize $\pm$ 2.04} & -1.58 {\scriptsize $\pm$ 2.71} & -0.01 {\scriptsize $\pm$ 0.84} & -0.04 {\scriptsize $\pm$ 0.88} & \gsecond{-9.48 {\scriptsize $\pm$ 0.87}} & -0.16 {\scriptsize $\pm$ 0.42} & +0.90 {\scriptsize $\pm$ 1.16} & -4.75 {\scriptsize $\pm$ 3.48} & +2.98 {\scriptsize $\pm$ 2.55} & -1.75 {\scriptsize $\pm$ 4.43} \\
+\midrule
+\multicolumn{11}{l}{\textbf{Judge-based confidence}}\\
+Judge g3-27i: reasoning (approx.) & -1.38 {\scriptsize $\pm$ 1.76} & -1.63 {\scriptsize $\pm$ 1.29} & +0.25 {\scriptsize $\pm$ 0.98} & -2.63 {\scriptsize $\pm$ 0.99} & \gfirst{-9.56 {\scriptsize $\pm$ 0.90}} & -1.53 {\scriptsize $\pm$ 0.66} & +0.75 {\scriptsize $\pm$ 0.80} & -4.46 {\scriptsize $\pm$ 0.97} & +0.15 {\scriptsize $\pm$ 0.88} & -1.01 {\scriptsize $\pm$ 4.90} \\
+Judge g3-27i: reasoning + confidence (approx.) & -1.48 {\scriptsize $\pm$ 1.61} & +0.51 {\scriptsize $\pm$ 1.16} & +0.00 {\scriptsize $\pm$ 0.88} & -0.86 {\scriptsize $\pm$ 0.88} & -8.80 {\scriptsize $\pm$ 0.84} & -0.17 {\scriptsize $\pm$ 0.20} & +0.28 {\scriptsize $\pm$ 0.93} & -1.38 {\scriptsize $\pm$ 1.03} & -0.03 {\scriptsize $\pm$ 0.58} & \gfirst{+0.23 {\scriptsize $\pm$ 4.78}} \\
+Judge l32-3bi: reasoning (approx.) & -0.26 {\scriptsize $\pm$ 1.80} & -5.88 {\scriptsize $\pm$ 1.21} & +0.51 {\scriptsize $\pm$ 0.79} & -2.83 {\scriptsize $\pm$ 0.99} & -8.35 {\scriptsize $\pm$ 1.23} & -1.66 {\scriptsize $\pm$ 0.46} & +2.72 {\scriptsize $\pm$ 0.83} & -10.30 {\scriptsize $\pm$ 1.05} & +0.03 {\scriptsize $\pm$ 0.40} & -2.72 {\scriptsize $\pm$ 3.72} \\
+Judge l32-3bi: reasoning + confidence (approx.) & -0.30 {\scriptsize $\pm$ 1.76} & -4.73 {\scriptsize $\pm$ 1.37} & +1.08 {\scriptsize $\pm$ 1.10} & -1.75 {\scriptsize $\pm$ 0.80} & -8.40 {\scriptsize $\pm$ 1.05} & -2.05 {\scriptsize $\pm$ 0.48} & +3.79 {\scriptsize $\pm$ 1.00} & -11.18 {\scriptsize $\pm$ 1.47} & +0.03 {\scriptsize $\pm$ 0.43} & -1.49 {\scriptsize $\pm$ 4.84} \\
+\midrule
+\multicolumn{11}{l}{\textbf{Learned per-model weights}}\\
+Kahn (full covariance) & \gthird{-2.15 {\scriptsize $\pm$ 1.62}} & +2.00 {\scriptsize $\pm$ 1.12} & \gthird{-0.25 {\scriptsize $\pm$ 0.53}} & \gsecond{+0.40 {\scriptsize $\pm$ 0.87}} & -9.36 {\scriptsize $\pm$ 0.71} & -0.15 {\scriptsize $\pm$ 0.37} & -1.06 {\scriptsize $\pm$ 0.69} & \gsecond{+0.70 {\scriptsize $\pm$ 0.77}} & +1.94 {\scriptsize $\pm$ 2.32} & -6.62 {\scriptsize $\pm$ 4.65} \\
+Kahn (diagonal covariance) & -0.84 {\scriptsize $\pm$ 1.64} & \gfirst{+2.12 {\scriptsize $\pm$ 1.13}} & +1.02 {\scriptsize $\pm$ 0.95} & +0.33 {\scriptsize $\pm$ 0.88} & -5.21 {\scriptsize $\pm$ 2.74} & \gthird{-0.01 {\scriptsize $\pm$ 0.06}} & \gfirst{-1.22 {\scriptsize $\pm$ 0.84}} & \gfirst{+0.94 {\scriptsize $\pm$ 0.79}} & +0.33 {\scriptsize $\pm$ 1.23} & -3.40 {\scriptsize $\pm$ 3.97} \\
+Weighted BLP & \gsecond{-2.19 {\scriptsize $\pm$ 1.65}} & +1.80 {\scriptsize $\pm$ 1.27} & \gfirst{-0.68 {\scriptsize $\pm$ 0.56}} & \gfirst{+0.64 {\scriptsize $\pm$ 0.68}} & -9.42 {\scriptsize $\pm$ 0.77} & \gsecond{+0.07 {\scriptsize $\pm$ 0.08}} & \gthird{-1.21 {\scriptsize $\pm$ 0.94}} & +0.60 {\scriptsize $\pm$ 0.65} & \gthird{-0.22 {\scriptsize $\pm$ 0.81}} & -1.60 {\scriptsize $\pm$ 3.41} \\
+Regularized logistic pooling & \gfirst{-2.52 {\scriptsize $\pm$ 1.68}} & \gsecond{+2.07 {\scriptsize $\pm$ 1.11}} & \gsecond{-0.64 {\scriptsize $\pm$ 0.56}} & \gthird{+0.40 {\scriptsize $\pm$ 0.87}} & \gthird{-9.44 {\scriptsize $\pm$ 0.75}} & -0.08 {\scriptsize $\pm$ 0.21} & \gsecond{-1.22 {\scriptsize $\pm$ 0.83}} & \gthird{+0.63 {\scriptsize $\pm$ 0.81}} & +2.28 {\scriptsize $\pm$ 2.55} & -7.13 {\scriptsize $\pm$ 4.65} \\
+\bottomrule
+\end{tabular}%
+}
+\vspace{2pt}
+\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split answer accuracy, with panel-order ties. Same-answer AUARC deltas use the reference model to score the selected voting answer. Calibrators are fitted on fitting data (CAGE-CAL: its internal validation). AUARC uses original rankings. The reference row is zero by definition. Approximate judges reuse earlier scores; the BetaSB variant remains in detailed results.}
+\end{table*}

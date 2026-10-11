@@ -161,8 +161,6 @@ def prepare(run, reference_mode='fit_accuracy'):
         if audit['n_matched'] != len(audit['matched_ids']) or audit['n_evaluation'] != len(audit['eval_ids']):
             raise ValueError(f'audit counts mismatch: {path}')
         present = {row['method'] for row in group}
-        if round_index != 1:
-            raise ValueError(f'only round-one debate is supported: {path}')
         if not ({'best_solo'} | (RULES.keys() - {'reference_stream_target'})) <= present:
             raise ValueError(f'missing composition methods: {path}')
         source_reference = next(row for row in group if row['method'] == 'best_solo')
@@ -433,7 +431,21 @@ CALIBRATIONS = {'t': ('temperature', 'one fitted temperature'),
                 'p': ('Platt', 'Platt scaling, a fitted slope and intercept on the logit')}
 
 
-def paper_table(rows, audits, tasks, calibration='t'):
+ROUND_WORDS = {1: 'one debate round', 2: 'two debate rounds', 3: 'three debate rounds'}
+
+
+def coverage_note(rows, audits, tasks, methods):
+    """Name every method and dataset averaged over fewer groups than the dataset has, e.g. after a failed fit."""
+    short = []
+    for method in methods:
+        for task in tasks:
+            _, _, available, expected = summary(rows, audits, method, task, None, 'auarc', 'target')
+            if 0 < available < expected:
+                short.append(f'{available} for {REPORT_RULES[method]} on {task.upper()}')
+    return f' ({"; ".join(short)})' if short else ''
+
+
+def paper_table(rows, audits, tasks, calibration='t', round_index=1):
     """`calibration` is 't' (temperature) or 'p' (Platt); everything else in the table is identical."""
     learned = ('kahn', 'kahn_diagonal', 'blp', 'logistic_pool')
     sections = (
@@ -443,13 +455,19 @@ def paper_table(rows, audits, tasks, calibration='t'):
         ('Learned per-model weights', learned),
         ('Pooled across both rounds', tuple(BOTH_ROUNDS + name for name in ('mean', 'logodds_sum', *learned))),
     )
+    present = {row['method'] for row in rows}
+    sections = tuple((title, kept) for title, methods in sections
+                     if (kept := tuple(m for m in methods if m in present)))
     fields = (f'{calibration}_ece', f'{calibration}_brier', 'auarc', 'answer_matched_auarc')
     name, description = CALIBRATIONS[calibration]
+    note = coverage_note(rows, audits, tasks, [m for _, methods in sections for m in methods])
+    groups = max(sum(audit['task'] == task for audit in audits) for task in tasks)
+    label = 'tab:debate-consistency-delta' + ('' if round_index == 1 else f'-round{round_index}') + ('' if calibration == 't' else '-platt')
     highlights = paper_highlights(rows, audits, sections, tasks, fields)
     width = 1 + len(tasks) * len(fields)
     lines = [r'\begin{table*}[t]', r'\centering',
-             r'\caption{Confidence quality after one debate round. Entries are mean $\pm$ sample SD of group-level method-minus-reference differences, in points ($\times 100$). Differences are computed before averaging across 15 groups per dataset (14 for logistic pooling on BoolQ). Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use ' + description + r'.}',
-             r'\label{tab:debate-consistency-delta' + ('' if calibration == 't' else '-platt') + '}',
+             r'\caption{Confidence quality after ' + ROUND_WORDS.get(round_index, f'{round_index} debate rounds') + r'. Entries are mean $\pm$ sample SD of group-level method-minus-reference differences, in points ($\times 100$). Differences are computed before averaging across ' + str(groups) + ' groups per dataset' + note + r'. Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use ' + description + r'.}',
+             r'\label{' + label + '}',
              r'\setlength{\tabcolsep}{2.6pt}', r'\resizebox{\textwidth}{!}{%',
              r'\begin{tabular}{@{}l' + 'r' * (width - 1) + r'@{}}', r'\toprule',
              ' & ' + ' & '.join(rf'\multicolumn{{4}}{{c}}{{{escape(task.upper())}}}' for task in tasks) + r' \\',
@@ -480,7 +498,13 @@ def paper_table(rows, audits, tasks, calibration='t'):
 
 def run(args):
     rows, audits, source = prepare(args.run, args.reference)
-    cage_provenance = append_cagecal(rows, audits, args.cagecal_dir)
+    rounds = sorted({row['round'] for row in rows})
+    if len(rounds) != 1:
+        raise ValueError(f'report one debate round at a time, found {rounds}')
+    round_index = rounds[0]
+    # CAGE-CAL's debate adapter is trained on round one only; later rounds report without it.
+    cage_provenance = (append_cagecal(rows, audits, args.cagecal_dir)
+                       if round_index == 1 and not args.no_cagecal else None)
     tasks = [task for task in TASKS if task in {row['task'] for row in rows}]
     if len(tasks) != len({row['task'] for row in rows}):
         raise ValueError('unknown dataset in composition output')
@@ -502,9 +526,10 @@ def run(args):
                                             f'{summary(rows, audits, method, task, size, "ece")[3]}' for task in tasks))
         (output / f'{prefix}_coverage.txt').write_text('\n'.join(coverage) + '\n')
     if args.out.resolve() == (ROOT / 'paper_results/results/debate_protocol').resolve() and args.reference == 'fit_accuracy':
+        stem = 'debate_consistency' + ('' if round_index == 1 else f'_round{round_index}')
         for calibration, suffix in (('t', ''), ('p', '_platt')):
-            (ROOT / f'paper_results/z_paper_tables/debate_consistency{suffix}.tex').write_text(
-                paper_table(rows, audits, tasks, calibration))
+            (ROOT / f'paper_results/z_paper_tables/{stem}{suffix}.tex').write_text(
+                paper_table(rows, audits, tasks, calibration, round_index))
     provenance = {'source_run': str(args.run.resolve()), 'source_run_id': source['run_id'],
                   'source_manifest_sha256': digest(args.run / 'manifest.json'),
                   'source_metrics_sha256': digest(args.run / 'metrics.csv'),
@@ -526,4 +551,5 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=ROOT / 'paper_results/results/debate_protocol')
     parser.add_argument('--reference', choices=('fit_accuracy', 'fit_auarc'), default='fit_accuracy')
     parser.add_argument('--cagecal-dir', type=Path, default=CAGE_RUN)
+    parser.add_argument('--no-cagecal', action='store_true', help='report without CAGE-CAL (automatic after round one)')
     run(parser.parse_args())

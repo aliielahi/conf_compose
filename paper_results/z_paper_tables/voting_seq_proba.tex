@@ -1,6 +1,6 @@
 \begin{table*}[t]
 \centering
-\caption{Voting confidence quality with seq scores. Each entry is the mean $\pm$ sample SD of the 15 group-level method-minus-reference differences, in points ($\times 100$). Differences are computed within each group before averaging. Negative calibration deltas and positive AUARC deltas are improvements.}
+\caption{Voting confidence quality with seq scores. Each entry is the mean $\pm$ sample SD of the 15 group-level method-minus-reference differences, in points ($\times 100$). Differences are computed within each group before averaging. Negative calibration deltas and positive AUARC deltas are improvements. Calibration metrics use one fitted output temperature.}
 \label{tab:voting-seq-delta}
 \setlength{\tabcolsep}{2.6pt}
 \resizebox{\textwidth}{!}{%
@@ -34,5 +34,5 @@ Regularized logistic pooling & \gthird{-2.45 {\scriptsize $\pm$ 2.76}} & \gfirst
 \end{tabular}%
 }
 \vspace{2pt}
-\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split answer accuracy, with panel-order ties. Calibration and original AUARC deltas compare with its own-answer scores; same-answer AUARC deltas use that model to score the selected voting answer. Temperatures are fitted on fitting data (CAGE-CAL: its internal validation). AUARC uses original rankings. The reference row is zero by definition. Approximate judges reuse earlier scores; the BetaSB variant remains in detailed results.}
+\parbox{\textwidth}{\footnotesize The reference model is selected by fitting-split answer accuracy, with panel-order ties. Calibration and original AUARC deltas compare with its own-answer scores; same-answer AUARC deltas use that model to score the selected voting answer. Calibrators are fitted on fitting data (CAGE-CAL: its internal validation). AUARC uses original rankings. The reference row is zero by definition. Approximate judges reuse earlier scores; the BetaSB variant remains in detailed results.}
 \end{table*}

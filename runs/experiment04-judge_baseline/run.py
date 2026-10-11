@@ -1,4 +1,7 @@
-"""Judge as a confidence combiner: given a panel and its majority answer, report a confidence in that answer."""
+"""Judge as a confidence combiner: given a panel and its majority answer, report a confidence in that answer.
+
+Round 0 reads the panel from the inference store; a later round reads it from the debate store, and the judge
+is handed the same majority (confidence tie-break) the debate composition scores."""
 
 import argparse
 import json
@@ -9,12 +12,14 @@ from conf_compose.constants import RESULTS_DIR, TASKS
 from conf_compose.data import Example, get_task
 from conf_compose.judge_for_conf import CONFIDENCE_MODES, Judge, JudgeConfig, PanelEntry, PanelView, VIEWS
 from conf_compose.composition import base_model
+from conf_compose.composition.post_debate import CompositionConfig, score_question
 from conf_compose.pipelines.inference import STORE, load_model
 from conf_compose.utils.metrics import auarc, auroc, ece
 
 NAME = "experiment04-judge_baseline"
 # The store's 8192 default overflowed on gpqa with 5-6 members (8,651 tokens); the longest panels need ~9k.
 JUDGE_CONTEXT = 32768
+DEBATE_STORE = RESULTS_DIR / "debate_inferences"
 
 # Candidate scoring lives in its own record field, so these are aggregated here rather than read off.
 CANDIDATE_METHODS = tuple(f"cand_{context}_{agg}" for context in ("direct", "reasoned")
@@ -64,6 +69,8 @@ def parse_args():
     parser.add_argument("--voter", type=int, default=0)
     parser.add_argument("--match", default="", help="substring picking one cell per model, e.g. _cs7s")
     parser.add_argument("--split", default="test")
+    parser.add_argument("--round", type=int, default=0, help="0: the independent answers; N: after debate round N")
+    parser.add_argument("--debate-store", default=str(DEBATE_STORE))
     parser.add_argument("--limit", type=int, help="first N examples, for a smoke run")
     parser.add_argument("--word-limit", type=int, default=150)
     parser.add_argument("--max-tokens", type=int, default=512)
@@ -74,6 +81,8 @@ def parse_args():
 
 def panel_records(args):
     """One cell per panel model, resolved by name so a digest change cannot silently pick another run."""
+    if args.round:
+        return debate_records(args)
     root = Path(args.store, args.task)
     per_model = {}
     for model in args.panel:
@@ -88,6 +97,30 @@ def panel_records(args):
             raise SystemExit(f"several cells for {model}; pass --match to pick one:\n{listing}")
         per_model[model] = ({row["id"]: row for row in _read(cells[0])}, cells[0].parent.name)
     return per_model
+
+
+def debate_records(args):
+    """Each member's answers after the requested debate round, from the one debate cell holding exactly this panel."""
+    models = [model.split("/")[-1] for model in args.panel]
+    cells = [p.parent for p in sorted(Path(args.debate_store, args.task).glob("*/settings.json"))
+             if json.loads(p.read_text())["settings"]["group"] == models]
+    if len(cells) != 1:
+        raise SystemExit(f"expected one debate cell for {'+'.join(models)} in {args.debate_store}/{args.task}, "
+                         f"found {len(cells)}")
+    per_model = {}
+    for model, name in zip(args.panel, models):
+        path = cells[0] / f"round_{args.round}" / f"{name}.jsonl"
+        if not path.exists():
+            raise SystemExit(f"round {args.round} missing for {name}: {path}")
+        per_model[model] = ({row["id"]: row for row in _read(path)}, f"{cells[0].name}/round_{args.round}")
+    return per_model
+
+
+def debate_answer(task, args, rows, example_id):
+    """The post-debate majority exactly as the debate composition picks it."""
+    models = [model.split("/")[-1] for model in args.panel]
+    records = {name: {example_id: rows[model]} for model, name in zip(args.panel, models)}
+    return score_question(task, models, records, example_id, args.round, "cons", CompositionConfig())["target"]
 
 
 def majority(task, answers):
@@ -125,8 +158,9 @@ def build_views(args, task, per_model):
                               confidence=signal(task, row, args.confidence_method))
                    for model, row in rows.items()]
         first = rows[args.panel[0]]
-        views.append(PanelView(example_id, first.get("question", ""), first["gold"], entries,
-                               majority(task, [e.answer for e in entries])))
+        final = (debate_answer(task, args, rows, example_id) if args.round
+                 else majority(task, [e.answer for e in entries]))
+        views.append(PanelView(example_id, first.get("question", ""), first["gold"], entries, final))
     return views
 
 
@@ -185,7 +219,7 @@ def judge_once(args, llm):
     summary = {**describe(args), **metrics(rows, args.modes), "context": JUDGE_CONTEXT}
 
     # metrics.json goes last: a cell is complete only once it exists.
-    out_dir = Path(args.out_dir) / args.task / _cell(args)
+    out_dir = output_root(args) / args.task / _cell(args)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "verdicts.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
     (out_dir / "manifest.json").write_text(json.dumps(
@@ -201,7 +235,13 @@ def describe(args):
     """The columns that identify a cell in summary.csv."""
     return {"task": args.task, "judge": args.judge, "n_models": len(args.panel),
             "panel": "+".join(m.split("/")[-1] for m in args.panel), "view": args.view,
-            "shown_confidence": args.confidence_method if args.view == "reasoning_confidence" else "none"}
+            "shown_confidence": args.confidence_method if args.view == "reasoning_confidence" else "none",
+            "round": getattr(args, "round", 0)}
+
+
+def output_root(args):
+    """Debate rounds sit in their own folders, so the round-0 cells and their summary stay untouched."""
+    return Path(args.out_dir) / f"debate_round_{args.round}" if args.round else Path(args.out_dir)
 
 
 def load_judge(name):
