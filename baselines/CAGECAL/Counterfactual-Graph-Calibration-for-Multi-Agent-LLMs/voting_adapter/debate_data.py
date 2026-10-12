@@ -71,8 +71,10 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
                 and (not panel or c['models'] == '|'.join(panel))]
     if not selected or (tasks and set(tasks) != {c['task'] for c in selected}):
         raise ValueError('Requested tasks/panel missing from debate paper table')
-    if {int(c['round']) for c in selected} != {1}:
-        raise ValueError('This adapter currently supports paired round-0 / round-1 debate only')
+    rounds = {int(c['round']) for c in selected}
+    if len(rounds) != 1 or min(rounds) < 1:
+        raise ValueError('Select exactly one positive debate round per run')
+    round_index = next(iter(rounds))
     rows, cells, groups, splits, seen = [], [], [], {}, set()
     for paper_cell in selected:
         task_name, models = paper_cell['task'], paper_cell['models']
@@ -83,13 +85,17 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
         aliases = models.split('|')
         model_ids = ['vllm/' + alias for alias in aliases]
         sample = next(r for r in atomic if r['task'] == task_name and r['models'] == models)
-        directory = project / 'results/debate_inferences' / task_name / sample['cell']
-        settings_path = directory / 'settings.json'
+        candidates = [path for path in source_hashes if path.name == 'settings.json'
+                      and path.parent.name == sample['cell'] and path.parent.parent.name == task_name]
+        if len(candidates) != 1:
+            raise ValueError(f'Expected one manifested debate source for {task_name}/{models}')
+        settings_path = candidates[0]
+        directory = settings_path.parent
         checked(settings_path, source_hashes[settings_path])
         settings = json.loads(settings_path.read_text())
         if settings['settings']['group'] != aliases or settings['settings']['task'] != task_name:
             raise ValueError('Debate model order/task differs from paper')
-        root = run / task_name / sample['cell'] / 'round_1' / sample['estimator']
+        root = run / task_name / sample['cell'] / f'round_{round_index}' / sample['estimator']
         audit = json.loads(artifact(root / 'audit.json').read_text())
         saved = {}
         with artifact(root / 'predictions.jsonl').open() as f:
@@ -115,7 +121,7 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
             path = portable_source(project, source['path'])
             checked(path, source['sha256'])
             initial.append(records(path))
-            current.append(records(directory / 'round_1' / f'{alias}.jsonl'))
+            current.append(records(directory / f'round_{round_index}' / f'{alias}.jsonl'))
         if any(set(r) != fit | evaluation for r in initial + current):
             raise ValueError('Debate or initial records do not cover the audited split exactly')
         config = audit['config']
@@ -130,7 +136,7 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
                 if bool(m['correct']) != expected:
                     raise ValueError(f'{task_name}/{qid}: correctness mismatch')
             for alias, m in zip(aliases, after):
-                if m['round'] != 1 or m['model'] != alias or m['group'] != aliases:
+                if m['round'] != round_index or m['model'] != alias or m['group'] != aliases:
                     raise ValueError('Turn metadata differs from panel')
                 if sorted(m['peer_order'] or []) != sorted(a for a in aliases if a != alias):
                     raise ValueError('Debate trace is not full peer exchange')
@@ -150,7 +156,7 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
                 missing.append(qid)
                 continue
             name = 'train' if qid in train else 'validation' if qid in validation else 'evaluation'
-            row = dict(task=task_name, models=models, model_ids=model_ids, id=qid, protocol='debate', round=1,
+            row = dict(task=task_name, models=models, model_ids=model_ids, id=qid, protocol='debate', round=round_index,
                        question=first['question'], target=target, answers=answers, selection_reason=reason,
                        mean_logprobs=[m['mean_logprob'] for m in after], split=name,
                        member_correct=[int(m['correct']) for m in after], correct=correctness,
@@ -165,7 +171,7 @@ def load_debate_bundle(project=DEFAULT_PROJECT, tasks=None, panel=None,
         cells.append(dict(paper_cell, estimator=sample['estimator'], coverage=len(matched)/len(evaluation),
                           vote_accuracy=vote_accuracy,
                           accuracy_all=sum(int(saved[q]["correct"]) for q in evaluation)/len(evaluation)))
-        groups.append(dict(task=task_name, models=models, round=1, counts=dict(counts), missing_feature_ids=missing,
+        groups.append(dict(task=task_name, models=models, round=round_index, counts=dict(counts), missing_feature_ids=missing,
                            tie_break=config['tie_break'], tie_seed=config['tie_seed'], n_samples=config['samples']))
     return dict(project=project, protocol='debate', rows=rows, cells=cells, splits=splits,
                 sources=provenance, groups=groups, atomic_path=table_dir / 'atomic.csv')

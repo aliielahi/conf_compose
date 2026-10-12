@@ -10,6 +10,7 @@ from .data import load_module, metric_module, safe_output
 
 METRICS = ("accuracy", "ece", "auarc", "auroc", "brier", "nll")
 TEMPERATURE_METRICS = ("t_brier", "t_ece")
+EXTRA_METRICS = ("p_brier", "p_ece", "answer_matched_auarc")
 
 LABELS = {"best_solo": "Best solo", "mean": "Arithmetic mean", "logodds_sum": "Log-odds sum",
           "logodds_mean": "Log-odds mean", "shared_rho": "Shared rho", "shared_scale": "Shared scale",
@@ -46,7 +47,7 @@ def make_reports(bundle, prediction_path, output):
     for r in original:
         for key in ("n_models", "n_matched"):
             r[key] = int(r[key])
-        numeric = ["coverage"] + [key for metric in METRICS + TEMPERATURE_METRICS
+        numeric = ["coverage"] + [key for metric in METRICS + TEMPERATURE_METRICS + EXTRA_METRICS
                    for key in (metric, "reference_" + metric, "delta_" + metric, "reference_" + metric + "_accuracy")]
         for key in numeric:
             if key in r:
@@ -102,6 +103,11 @@ def make_reports(bundle, prediction_path, output):
                 t_scores = dict(t_brier=float(methods.brier(tp, y)), t_ece=float(methods.ece(tp, y)))
                 temperatures.append(dict(task=task, models=models, estimator=estimator, temperature=temperature,
                                          n_validation=len(val), status=status))
+            extra_scores = dict(p_brier=None, p_ece=None, answer_matched_auarc=score["auarc"])
+            if field == "raw" and val:
+                fitted = calibration.PlattCalibrator().fit([r["raw"] for r in val], [r["correct"] for r in val])
+                platt = fitted.predict(p)
+                extra_scores.update(p_brier=float(methods.brier(platt, y)), p_ece=float(methods.ece(platt, y)))
             row = dict(sample)
             if "output_temperature" in row:
                 row["output_temperature"] = temperature
@@ -114,7 +120,7 @@ def make_reports(bundle, prediction_path, output):
             row["method"] = name
             if "status" in row:
                 row["status"] = "trained"
-            for metric, value in {**score, **t_scores}.items():
+            for metric, value in {**score, **t_scores, **extra_scores}.items():
                 if metric in row:
                     row[metric] = value
                 delta = "delta_" + metric

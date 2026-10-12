@@ -11,10 +11,13 @@ LOGIT_GRID = (0.0, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0, np.inf)
 AVERAGE_GRID = (0.0, 10.0, 100.0, 1000.0, 10000.0, np.inf)
 FOLDS = 5
 SEED = 0
+# Member log-odds are exact down to float64 resolution (at most 36.7 nats); the pipeline's 1e-3 clip would cap
+# near-certain sequence probabilities at 6.9 nats and tie them. Consistency (1/12 to 11/12) never reaches either bound.
+RESOLUTION = 2.0 ** -53
 
 
 def logits(probabilities):
-    clipped = np.clip(probabilities, EPSILON, 1 - EPSILON)
+    clipped = np.clip(probabilities, RESOLUTION, 1 - RESOLUTION)
     return np.log(clipped) - np.log1p(-clipped)
 
 

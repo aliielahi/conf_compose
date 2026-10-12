@@ -94,7 +94,11 @@ def select_vote(task, members, model_ids, qid, samples=5, tie_break="first", tie
         raise ValueError(f"Unknown saved tie-break rule: {tie_break}")
     if not candidates:
         return None, normalized, "no_answer"
-    counts = Counter(a for a in normalized if a is not None)
+    # Numeric parsing can reject even self-equivalence (e.g. division by zero).
+    # Match the composition voter: count task-equivalent answers, not strings.
+    counts = {a: sum(m["prediction"] is not None and task.equivalent(str(m["prediction"]), a)
+                     for m in members) for a in candidates}
+    first = max(candidates, key=lambda a: counts[a])
     tied = [a for a in candidates if counts[a] == max(counts.values())]
     if tie_break == "first":
         return first, normalized, "first" if len(tied) > 1 else "count"

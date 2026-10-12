@@ -218,3 +218,44 @@ disclosed. Missing graph features outside the matched mask are listed in the
 manifest; missing features within that mask abort rather than shrink evaluation.
 Old CAGE rows in the input table are removed from the generated table copies.
 Neither the parent paper tables nor inference files are modified.
+
+## Round 2 (fresh inference store)
+
+The adapter now derives the positive debate round and the inference directory
+from the selected paper/composition manifests. It never selects a round by
+mtime or substitutes the old store. One round per run is required. The two
+towers compare that final round with independent round 0; intermediate rounds
+are not additional graph nodes. Communication edges indicate final-round peer
+exposure, not the number of message exchanges. Existing split and hash checks
+still apply.
+
+Current round-2 input report:
+`paper_results/results/debate_protocol/run_12a013aed30bd201/cons`.
+Its source run is `results/debate_composition/run_12a013aed30bd201` and its
+inferences are under `results/debate_inferences_fresh/debate_inferences/`.
+Keep exactly that directory layout on the GPU, even if another copy exists in
+the old `results/debate_inferences` store. Original `results/inferences` is
+also required for the independent tower.
+
+```bash
+source .venv-voting/bin/activate
+CAGE_TABLE=/workspace/paper_results/results/debate_protocol/run_12a013aed30bd201/cons
+python -B -m voting_adapter.run --protocol debate --debate-table "$CAGE_TABLE" --audit-only
+python -B -m voting_adapter.run --protocol debate --debate-table "$CAGE_TABLE" \
+  --tasks csqa boolq --panel q3-4bi l31-8bi g3-12i --seeds 1 --epochs 2 --device cuda:0
+python -B -m voting_adapter.run --protocol debate --debate-table "$CAGE_TABLE" --device cuda:0
+```
+
+Copy the full run's `results/debate_adapter/<digest>/` back to the project's
+`baselines/results/debate_adapter/<digest>/` on the Mac. The updated main table
+script accepts the matching round-2 run and rejects round-1 cells. From the
+project root, substitute the printed full-run digest:
+
+```bash
+python -B paper_results/codes/debate_protocol/run.py \
+  --run results/debate_composition/run_12a013aed30bd201 \
+  --cagecal-dir baselines/results/debate_adapter/FULL_RUN_DIGEST
+```
+
+This final reporting command updates the round-2 paper tables and includes the
+CAGE-Cal row. It needs no GPU. Do not use the two-epoch pilot for the main table.

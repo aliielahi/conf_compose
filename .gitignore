@@ -29,3 +29,5 @@ brainstorms_codex
 paper_results/results
 
 paper_results/weighting_study
+/paper_results/logodds_study/cells.pkl
+paper_results/logodds_study

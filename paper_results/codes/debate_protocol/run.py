@@ -502,9 +502,9 @@ def run(args):
     if len(rounds) != 1:
         raise ValueError(f'report one debate round at a time, found {rounds}')
     round_index = rounds[0]
-    # CAGE-CAL's debate adapter is trained on round one only; later rounds report without it.
+    # append_cagecal verifies the exact round, groups, targets and evaluation masks.
     cage_provenance = (append_cagecal(rows, audits, args.cagecal_dir)
-                       if round_index == 1 and not args.no_cagecal else None)
+                       if not args.no_cagecal else None)
     tasks = [task for task in TASKS if task in {row['task'] for row in rows}]
     if len(tasks) != len({row['task'] for row in rows}):
         raise ValueError('unknown dataset in composition output')
@@ -551,5 +551,5 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=ROOT / 'paper_results/results/debate_protocol')
     parser.add_argument('--reference', choices=('fit_accuracy', 'fit_auarc'), default='fit_accuracy')
     parser.add_argument('--cagecal-dir', type=Path, default=CAGE_RUN)
-    parser.add_argument('--no-cagecal', action='store_true', help='report without CAGE-CAL (automatic after round one)')
+    parser.add_argument('--no-cagecal', action='store_true', help='report without CAGE-CAL')
     run(parser.parse_args())

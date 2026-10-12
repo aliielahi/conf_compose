@@ -75,6 +75,13 @@ class AdapterTests(unittest.TestCase):
         members[2]["prediction"] = "A"
         self.assertEqual(select_vote(task, members, ["a", "b", "c"], "q", tie_break="confidence")[0], "A")
 
+    def test_nonreflexive_numeric_answer_is_not_a_valid_vote(self):
+        task = self.get_task("gsm8k")
+        members = [dict(prediction="56", samples=["56"]*5),
+                   dict(prediction="13396297963520 / 0", samples=["56", "56", "55.92", "56", "0.93"])]
+        target, _, reason = select_vote(task, members, ["a", "b"], "q", tie_break="confidence")
+        self.assertEqual((target, reason), ("56", "count"))
+
     def test_seeded_ties_are_order_independent_and_ignore_gold(self):
         task = self.get_task("csqa")
         members = [dict(prediction=a, samples=[a] * 5) for a in ("A", "B", "C")]

@@ -4,9 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from .data import ROOT, DEFAULT_PROJECT, file_hash
+from .data import ROOT, DEFAULT_PROJECT, file_hash, load_module
 from .debate_data import load_debate_bundle
 
 
@@ -109,6 +110,38 @@ class DebateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Source hash differs'):
                 self.load()
 
+    def test_round_two_in_fresh_nested_store(self):
+        old_cell = self.cell
+        self.cell = self.project / 'results/debate_inferences_fresh/debate_inferences/csqa/a+b'
+        self.cell.parent.mkdir(parents=True)
+        old_cell.rename(self.cell)
+        (self.cell/'round_1').rename(self.cell/'round_2')
+        self.current = [self.cell/'round_2'/p.name for p in self.current]
+        self.sources = self.initial + self.current + [self.cell/'settings.json']
+        for path in self.current:
+            rows = [json.loads(line) for line in path.read_text().splitlines()]
+            for row in rows:
+                row['round'] = 2
+            self.jsonl(path, rows)
+        old_group = self.group
+        self.group = old_group.parent.parent/'round_2/cons'
+        self.group.parent.mkdir()
+        old_group.rename(self.group)
+        audit = json.loads((self.group/'audit.json').read_text())
+        audit['round'] = 2
+        self.write(self.group/'audit.json', audit)
+        self.write(self.table/'audit.json', [audit])
+        self.refresh()
+        bundle = self.load()
+        self.assertEqual({r['round'] for r in bundle['rows']}, {2})
+        self.assertEqual(bundle['groups'][0]['round'], 2)
+        self.assertTrue(any('debate_inferences_fresh' in p for p in bundle['sources']))
+        rows[0]['round'] = 1
+        self.jsonl(self.current[-1], rows)
+        self.refresh()
+        with self.assertRaisesRegex(ValueError, 'Turn metadata'):
+            self.load()
+
     def test_changed_inference_hash_is_rejected(self):
         with self.current[0].open('a') as f:
             f.write('\n')
@@ -128,6 +161,15 @@ class DebateTests(unittest.TestCase):
         self.jsonl(self.current[0], rows); self.refresh()
         with self.assertRaisesRegex(ValueError, 'full peer exchange'):
             self.load()
+
+    def test_main_report_accepts_round_two_baseline(self):
+        report = load_module(DEFAULT_PROJECT / 'paper_results/codes/debate_protocol/run.py', 'test_round2_main_report')
+        args = SimpleNamespace(run=Path('unused'), reference='fit_accuracy', cagecal_dir=Path('baseline'), no_cagecal=False)
+        with patch.object(report, 'prepare', return_value=([{'round': 2}], [], {})), \
+             patch.object(report, 'append_cagecal', side_effect=RuntimeError('reached baseline validation')) as append:
+            with self.assertRaisesRegex(RuntimeError, 'reached baseline validation'):
+                report.run(args)
+            append.assert_called_once()
 
     def test_validation_temperature_and_no_old_baseline_rows(self):
         from .report import make_reports

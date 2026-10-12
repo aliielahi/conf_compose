@@ -59,7 +59,7 @@ def contain_caches():
 def manifest_for(bundle, args):
     config = {key: getattr(args, key) for key in ("seeds", "epochs", "batch_size", "neighbors", "validation_fraction",
                                                 "split_seed", "embedding_model")}
-    config.update(tasks=sorted(bundle["splits"]), panels=sorted({g["models"] for g in bundle["groups"]}),
+    config.update(debate_rounds=sorted({g["round"] for g in bundle["groups"] if "round" in g}), tasks=sorted(bundle["splits"]), panels=sorted({g["models"] for g in bundle["groups"]}),
                   protocol=args.protocol, topology="iid" if args.protocol == "voting" else "debate", voter=0, response_logprob=True, brier_weight=0.4,
                   label_smoothing=0.05, min_calibration_questions=50)
     paths = sorted((ROOT / "voting_adapter").glob("*.py")) + sorted((ROOT / "cage_cal").glob("*.py"))
