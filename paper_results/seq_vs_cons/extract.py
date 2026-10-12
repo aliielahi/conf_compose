@@ -1,4 +1,4 @@
-"""Per-group Δp-Brier and ΔAUARC of the plain and the learned-weight log-odds sum, per confidence estimator."""
+"""Per-group ΔAccuracy, Δp-Brier and ΔAUARC of the plain and the learned-weight log-odds sum, per confidence estimator."""
 
 import json
 import math
@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "paper_results/codes/voting_protocol"))
 sys.path.insert(0, str(ROOT / "paper_results/weighting_study"))
 
 import data as voting  # noqa: E402
-from methods import weighted_sum  # noqa: E402
+from methods import weighted_average, weighted_sum  # noqa: E402
 from conf_compose.composition.pooling import pool_methods  # noqa: E402
 from conf_compose.data import Example, get_task  # noqa: E402
 from conf_compose.utils.calibration import PlattCalibrator  # noqa: E402
@@ -33,19 +33,22 @@ VARIANTS = {"seq_label": ("direct", "norm_sum"), "seq_token": ("direct", "norm_m
             "seq_reasoned": ("reasoned", "norm_sum")}
 
 
-# The proposed learned weights: shrunk toward one shared scale, strength chosen by cross-validation (one-SE rule).
-WEIGHTED = weighted_sum(one_se=True)
+# The proposed learned weights in log-odds and in probability space: shrunk toward equal weights,
+# strength chosen by cross-validation (one-SE rule).
+LEARNED = {"weighted_sum": weighted_sum(one_se=True), "weighted_average": weighted_average(one_se=True)}
 
 
-def methods(fit, fit_labels, evaluation, labels):
-    """Both pooling rules as (Platt Brier, AUARC), from member confidence matrices."""
+def methods(fit, fit_labels, evaluation, labels, learned=("weighted_sum",)):
+    """The plain log-odds sum and the chosen learned rules as (Platt Brier, AUARC), from member confidence matrices."""
     fit, evaluation, fit_labels = (np.asarray(v, dtype=float) for v in (fit, evaluation, fit_labels))
-    fit_conf, conf, rank = WEIGHTED(fit, fit_labels, evaluation)
     plain = [pool_methods(list(row))["logodds_sum"] for row in evaluation]
-    return {"logodds_sum": (platt_brier([pool_methods(list(row))["logodds_sum"].score for row in fit], fit_labels,
-                                        [p.score for p in plain], labels),
-                            ranking_auarc([voting.rank_value(p) for p in plain], labels)),
-            "weighted_sum": (platt_brier(fit_conf, fit_labels, conf, labels), ranking_auarc(rank, labels))}
+    results = {"logodds_sum": (platt_brier([pool_methods(list(row))["logodds_sum"].score for row in fit], fit_labels,
+                                           [p.score for p in plain], labels),
+                               ranking_auarc([voting.rank_value(p) for p in plain], labels))}
+    for name in learned:
+        fit_conf, conf, rank = LEARNED[name](fit, fit_labels, evaluation)
+        results[name] = (platt_brier(fit_conf, fit_labels, conf, labels), ranking_auarc(rank, labels))
+    return results
 
 
 def platt_brier(fit_scores, fit_labels, scores, labels):
@@ -56,7 +59,7 @@ def ranking_auarc(ranks, labels):
     return float(auarc(np.round(np.asarray(ranks, dtype=float), 12), labels))
 
 
-def voting_rows(estimator, context="direct", seq_score="norm_sum"):
+def voting_rows(estimator, context="direct", seq_score="norm_sum", learned=("weighted_sum",)):
     """Replays the voting pipeline's reference and log-odds sum on its own matched questions."""
     matched = {(cell["task"], cell["models"]): set(cell["matched_ids"])
                for cell in json.loads(VOTING_AUDIT.read_text()) if cell["estimator"] == estimator}
@@ -95,13 +98,16 @@ def voting_rows(estimator, context="direct", seq_score="norm_sum"):
             shared.append(scores[reference])
         reference_brier = platt_brier(fit_own, fit_own_labels, own_values, own_labels)
         reference_auarc = ranking_auarc(shared, labels)
-        for method, (p_brier, auarc_value) in methods(fit_scores, fit_sum_labels, matrix, labels).items():
+        delta_accuracy = mean(labels) - mean(own_labels)
+        for method, (p_brier, auarc_value) in methods(fit_scores, fit_sum_labels, matrix, labels, learned).items():
             yield {"task": row["task"], "models": row["models"], "n_models": len(group), "n_eval": len(labels),
-                   "method": method, "delta_p_brier": p_brier - reference_brier,
+                   "method": method, "accuracy": mean(labels), "delta_accuracy": delta_accuracy,
+                   "p_brier": p_brier, "reference_p_brier": reference_brier, "delta_p_brier": p_brier - reference_brier,
+                   "auarc": auarc_value, "reference_auarc": reference_auarc,
                    "delta_auarc": auarc_value - reference_auarc}
 
 
-def debate_rows(run, round_index, estimator):
+def debate_rows(run, round_index, estimator, learned=("weighted_sum",)):
     """Log-odds sum over round 0 and the given round against the best agent's post-debate confidence."""
     for path in sorted((DEBATE_DIR / run).glob(f"*/*/round_{round_index}/{estimator}/predictions.jsonl")):
         audit = json.loads(path.with_name("audit.json").read_text())
@@ -122,11 +128,15 @@ def debate_rows(run, round_index, estimator):
         reference_brier = platt_brier([reference(q) for q in fit_reference], [label[q] for q in fit_reference],
                                       [reference(q) for q in audit["matched_ids"]], [label[q] for q in audit["matched_ids"]])
         reference_auarc = ranking_auarc([reference(q) for q in audit["matched_ids"]], [label[q] for q in audit["matched_ids"]])
+        delta_accuracy = (mean(label[q] for q in audit["matched_ids"])
+                          - mean(float(records[q]["post_correct"][index]) for q in audit["matched_ids"]))
         results = methods([streams(q) for q in fit], [label[q] for q in fit], [streams(q) for q in both],
-                          [label[q] for q in both])
+                          [label[q] for q in both], learned)
         for method, (p_brier, auarc_value) in results.items():
             yield {"task": audit["task"], "models": audit["models"], "n_models": audit["n_models"], "n_eval": len(both),
-                   "method": method, "delta_p_brier": p_brier - reference_brier,
+                   "method": method, "accuracy": mean(label[q] for q in audit["matched_ids"]),
+                   "delta_accuracy": delta_accuracy, "p_brier": p_brier, "reference_p_brier": reference_brier,
+                   "delta_p_brier": p_brier - reference_brier, "auarc": auarc_value, "reference_auarc": reference_auarc,
                    "delta_auarc": auarc_value - reference_auarc}
 
 

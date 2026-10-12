@@ -1,0 +1,47 @@
+% Needs in the preamble: \usepackage{pgfplots} \usepgfplotslibrary{groupplots} \pgfplotsset{compat=1.17}
+\definecolor{scvoting}{HTML}{2A78D6}
+\definecolor{scdebater1}{HTML}{EB6834}
+\definecolor{scdebater2}{HTML}{1BAF7A}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=0.8cm},
+  scale only axis, width=0.28\textwidth, height=0.19\textwidth,
+  xmin=1.6, xmax=6.4, xtick={2,3,4,5,6},
+  axis line style={black!55, line width=0.4pt}, tick style={black!55, line width=0.4pt}, tick align=inside,
+  tick label style={font=\tiny, black!70}, label style={font=\scriptsize},
+  ymajorgrids, grid style={black!7, line width=0.3pt},
+  scaled y ticks=false, yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=3},
+  xlabel={Number of Agents in Group}, title style={font=\footnotesize, yshift=-3pt, text height=1.6ex, text depth=0.4ex},
+  every axis plot/.append style={line width=0.9pt, mark size=2.0pt}]
+\nextgroupplot[title={CSQA}, ymin=11.240, ymax=14.848, ylabel={p-Brier ($\times 100$)}]
+\addplot[color=scvoting, solid, mark=*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scvoting}] coordinates {(2,13.2525) (3,12.7787) (4,11.8784) (5,11.9364) (6,11.6710)};
+\addplot[color=scdebater1, solid, mark=square*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater1}] coordinates {(2,13.0231) (3,12.5131) (4,11.6548) (5,11.7400) (6,11.7674)};
+\addplot[color=scdebater2, solid, mark=triangle*, mark size=2.8pt, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater2}] coordinates {(2,12.9389) (3,12.4444) (4,11.7235) (5,11.4885) (6,11.9263)};
+\addplot[color=scvoting, densely dotted, mark=*, forget plot, mark options={solid, draw=scvoting, line width=0.35pt, fill=white}] coordinates {(2,14.3493) (3,13.6883) (4,12.8770) (5,12.6963) (6,12.4563)};
+\addplot[color=scdebater1, densely dotted, mark=square*, forget plot, mark options={solid, draw=scdebater1, line width=0.35pt, fill=white}] coordinates {(2,14.4608) (3,13.4533) (4,12.5572) (5,12.1970) (6,12.5347)};
+\addplot[color=scdebater2, densely dotted, mark=triangle*, mark size=2.2pt, forget plot, mark options={solid, draw=scdebater2, line width=0.35pt, fill=white}] coordinates {(2,14.5988) (3,13.3472) (4,12.8084) (5,12.1266) (6,12.3897)};
+\nextgroupplot[title={TruthfulQA}, ymin=11.409, ymax=15.478, legend columns=5, legend style={at={(0.5,1.3)}, anchor=south, draw=none, fill=none, font=\scriptsize, /tikz/every even column/.append style={column sep=5pt}}]
+\addlegendimage{black!80, line width=1.0pt}
+\addlegendentry{Consistency}
+\addlegendimage{black!80, line width=1.0pt, densely dotted}
+\addlegendentry{Seq. Prob.}
+\addlegendimage{only marks, mark=*, color=scvoting, mark size=2pt}
+\addlegendentry{Before Interaction}
+\addlegendimage{only marks, mark=square*, color=scdebater1, mark size=2pt}
+\addlegendentry{Interaction Round 1}
+\addlegendimage{only marks, mark=triangle*, color=scdebater2, mark size=2pt}
+\addlegendentry{Interaction Round 2}
+\addplot[color=scvoting, solid, mark=*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scvoting}] coordinates {(2,14.2286) (3,13.3722) (4,12.8682) (5,12.6138) (6,12.6696)};
+\addplot[color=scdebater1, solid, mark=square*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater1}] coordinates {(2,13.6203) (3,13.1458) (4,12.6965) (5,11.6898) (6,12.1320)};
+\addplot[color=scdebater2, solid, mark=triangle*, mark size=2.8pt, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater2}] coordinates {(2,13.4876) (3,12.5108) (4,12.5402) (5,11.9849) (6,11.9372)};
+\addplot[color=scvoting, densely dotted, mark=*, forget plot, mark options={solid, draw=scvoting, line width=0.35pt, fill=white}] coordinates {(2,15.1975) (3,14.6845) (4,13.6604) (5,13.4668) (6,13.4481)};
+\addplot[color=scdebater1, densely dotted, mark=square*, forget plot, mark options={solid, draw=scdebater1, line width=0.35pt, fill=white}] coordinates {(2,14.9002) (3,14.1350) (4,13.6791) (5,12.3152) (6,12.5028)};
+\addplot[color=scdebater2, densely dotted, mark=triangle*, mark size=2.2pt, forget plot, mark options={solid, draw=scdebater2, line width=0.35pt, fill=white}] coordinates {(2,14.6998) (3,13.9559) (4,13.2440) (5,12.2738) (6,12.6820)};
+\nextgroupplot[title={GSM8K}, ymin=2.860, ymax=4.744]
+\addplot[color=scvoting, solid, mark=*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scvoting}] coordinates {(2,3.8282) (3,3.4609) (4,3.2523) (5,2.9902) (6,3.0390)};
+\addplot[color=scdebater1, solid, mark=square*, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater1}] coordinates {(2,3.7975) (3,3.4904) (4,3.1161) (5,3.1260) (6,3.2542)};
+\addplot[color=scdebater2, solid, mark=triangle*, mark size=2.8pt, forget plot, mark options={solid, draw=white, line width=0.35pt, fill=scdebater2}] coordinates {(2,4.0581) (3,3.5234) (4,3.3610) (5,3.3317) (6,3.3431)};
+\addplot[color=scvoting, densely dotted, mark=*, forget plot, mark options={solid, draw=scvoting, line width=0.35pt, fill=white}] coordinates {(2,4.6145) (3,4.0178) (4,3.4239) (5,3.4679) (6,3.3429)};
+\addplot[color=scdebater1, densely dotted, mark=square*, forget plot, mark options={solid, draw=scdebater1, line width=0.35pt, fill=white}] coordinates {(2,4.5340) (3,3.6342) (4,3.3801) (5,3.0100) (6,3.1250)};
+\addplot[color=scdebater2, densely dotted, mark=triangle*, mark size=2.2pt, forget plot, mark options={solid, draw=scdebater2, line width=0.35pt, fill=white}] coordinates {(2,4.2429) (3,3.6136) (4,3.3223) (5,3.2005) (6,3.1860)};
+\end{groupplot}
+\end{tikzpicture}

@@ -116,7 +116,7 @@ def pgfplots(points, ylabel, sizes):
               "  axis line style={black!55, line width=0.4pt}, tick style={black!55, line width=0.4pt}, tick align=inside,",
               "  tick label style={font=\\tiny, black!70}, label style={font=\\scriptsize},",
               "  ymajorgrids, grid style={black!7, line width=0.3pt},",
-              f"  xlabel={{{XLABEL}}}, title style={{font=\\footnotesize, yshift=-3pt}},",
+              f"  xlabel={{{XLABEL}}}, title style={{font=\\footnotesize, yshift=-3pt, text height=1.6ex, text depth=0.4ex}},",
               "  every axis plot/.append style={line width=0.7pt, mark size=1.4pt}]"]
     for index, (task, name) in enumerate(TASKS.items()):
         low, high = limits(points, task)
