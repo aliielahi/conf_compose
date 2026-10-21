@@ -143,6 +143,14 @@ def portable_source(project, saved):
     path = Path(os.path.abspath(path))
     if project not in path.parents:
         raise ValueError(f"Paper input is outside the project: {saved}")
+    # Mac downloads wrap the debate store in an extra directory. On the GPU
+    # use the original store when that downloaded store is absent. Choose at
+    # store level so a partial download cannot silently mix two inference runs.
+    downloaded = project / "results/debate_inferences_fresh/debate_inferences"
+    if downloaded in path.parents and not downloaded.exists():
+        native = project / "results/debate_inferences"
+        if native.is_dir():
+            path = native / path.relative_to(downloaded)
     return path
 
 

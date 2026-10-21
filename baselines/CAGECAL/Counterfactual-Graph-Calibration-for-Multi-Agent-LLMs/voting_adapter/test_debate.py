@@ -142,6 +142,25 @@ class DebateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Turn metadata'):
             self.load()
 
+    def test_downloaded_manifest_reads_native_gpu_store(self):
+        manifest_path = self.run / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['identity']['sources'] = {
+            str(k).replace('/results/debate_inferences/',
+                           '/results/debate_inferences_fresh/debate_inferences/'): v
+            for k, v in manifest['identity']['sources'].items()}
+        self.write(manifest_path, manifest)
+        report = json.loads((self.table / 'manifest.json').read_text())
+        report['source_manifest_sha256'] = file_hash(manifest_path)
+        self.write(self.table / 'manifest.json', report)
+        bundle = self.load()
+        self.assertEqual(len(bundle['rows']), 13)
+        self.assertFalse(any('debate_inferences_fresh' in p for p in bundle['sources']))
+        with self.current[0].open('a') as f:
+            f.write('\n')
+        with self.assertRaisesRegex(ValueError, 'Source hash differs'):
+            self.load()
+
     def test_changed_inference_hash_is_rejected(self):
         with self.current[0].open('a') as f:
             f.write('\n')

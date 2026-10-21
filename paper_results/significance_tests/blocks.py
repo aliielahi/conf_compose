@@ -16,10 +16,15 @@ ROOT = HERE.parents[1]
 RESULTS = ROOT / "paper_results/results"
 PROTOCOLS = {"voting": "Before Interaction", "debate_r1": "Interaction Round 1", "debate_r2": "Interaction Round 2"}
 DEBATE_RUNS = {"debate_r1": "run_40bca54388122738", "debate_r2": "run_12a013aed30bd201"}
-# CAGE-CAL adapter run per protocol; round two is added here once its adapter is trained.
+# CAGE-CAL adapter run per protocol.
 CAGECAL = {"voting": ROOT / "baselines/results/voting_adapter/a1fc8f63af8e71c5",
            "debate_r1": ROOT / "baselines/results/debate_adapter/71259088b2f0e984",
-           "debate_r2": None}
+           "debate_r2": ROOT / "baselines/results/debate_adapter/28318b2175dcf723"}
+# Where each protocol's own report holds CAGE-CAL rows: the paper reports for voting and round one, and the round-two
+# adapter's report, which reruns the round-two debate table with CAGE-CAL added.
+CAGECAL_TABLES = {"voting": (RESULTS / "voting_protocol/atomic.csv", "cagecal_iid"),
+                  "debate_r1": (RESULTS / f"debate_protocol/{DEBATE_RUNS['debate_r1']}/cons/atomic.csv", "cagecal_debate"),
+                  "debate_r2": (CAGECAL["debate_r2"] / "paper_tables/atomic.csv", "cagecal_debate")}
 # Weighting-study method -> system name, as the rows of the main table.
 POOLING = {"weighted_average_1se": "Prob. Learned Weights", "logodds_sum": "Log-odds Sum",
            "shared_scale": "Fitted Scale", "weighted_sum_1se": "Log-odds Learned Weights"}
@@ -108,15 +113,13 @@ def sequence_rows():
 
 
 def check_cagecal(frame):
-    """Recomputed CAGE-CAL must equal the pipeline's own table rows wherever the pipeline has them."""
-    tables = {"voting": (RESULTS / "voting_protocol/atomic.csv", "cagecal_iid"),
-              **{p: (RESULTS / f"debate_protocol/{run}/cons/atomic.csv", "cagecal_debate") for p, run in DEBATE_RUNS.items()}}
-    for protocol, (path, method) in tables.items():
+    """Recomputed CAGE-CAL must equal each protocol's own CAGE-CAL report, group by group."""
+    for protocol, (path, method) in CAGECAL_TABLES.items():
         table = pd.read_csv(path)
         table = table[(table.method == method) & (table.get("estimator", "cons") == "cons")]
         mine = frame[(frame.protocol == protocol) & (frame.system == "CAGE-CAL")]
         if table.empty or mine.empty:
-            continue
+            raise ValueError(f"CAGE-CAL {protocol}: missing from the recomputation or from {path}")
         joined = mine.merge(table, on=["task", "models"], suffixes=("", "_table"), validate="one_to_one")
         gap = max((joined.p_brier - joined.p_brier_table).abs().max(),
                   (joined.auarc - joined.answer_matched_auarc).abs().max())

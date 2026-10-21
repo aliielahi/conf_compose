@@ -1,19 +1,21 @@
 family,estimator,protocol,first,second,metric,median,wins,losses,ties,p,p_holm
-baselines,consistency,voting,Log-odds Learned Weights,Best Agent,auarc,3.2943049115066403,71,4,0,3.40355308261315e-17,1.36142123304526e-16
+baselines,consistency,voting,Log-odds Learned Weights,Best Agent,auarc,3.2943049115066403,71,4,0,3.40355308261315e-17,1.701776541306575e-16
 baselines,consistency,voting,Log-odds Learned Weights,Best Agent,p_brier,1.1638247375347899,66,9,0,3.829420351025133e-12,3.829420351025133e-12
 baselines,consistency,voting,Log-odds Learned Weights,CAGE-CAL,auarc,1.117070289437705,57,18,0,3.6220782568872284e-06,3.6220782568872284e-06
-baselines,consistency,voting,Log-odds Learned Weights,CAGE-CAL,p_brier,2.0332039081508766,74,1,0,2.0117032497289633e-21,1.6093625997831706e-20
+baselines,consistency,voting,Log-odds Learned Weights,CAGE-CAL,p_brier,2.0332039081508766,74,1,0,2.0117032497289633e-21,1.810532924756067e-20
 baselines,consistency,voting,Log-odds Learned Weights,LLM Elicited,auarc,0.964237669185597,65,10,0,2.5771044041232744e-11,5.154208808246549e-11
 baselines,consistency,voting,Log-odds Learned Weights,LLM Elicited,p_brier,0.6269794835829002,69,6,0,5.820830689382727e-15,2.9104153446913634e-14
-baselines,consistency,debate_r1,Log-odds Learned Weights,Best Agent,auarc,5.708940349170466,75,0,0,2.6469779601696886e-23,2.117582368135751e-22
+baselines,consistency,debate_r1,Log-odds Learned Weights,Best Agent,auarc,5.708940349170466,75,0,0,2.6469779601696886e-23,2.3822801641527197e-22
 baselines,consistency,debate_r1,Log-odds Learned Weights,Best Agent,p_brier,1.3961508458776084,67,8,0,5.049319131148891e-13,1.5147957393446672e-12
-baselines,consistency,debate_r1,Log-odds Learned Weights,CAGE-CAL,auarc,1.3213515166855427,70,5,0,4.908877801858627e-16,1.4726633405575881e-15
-baselines,consistency,debate_r1,Log-odds Learned Weights,CAGE-CAL,p_brier,1.8563350783140726,72,3,0,1.86283720924902e-18,1.303986046474314e-17
-baselines,consistency,debate_r1,Log-odds Learned Weights,LLM Elicited,auarc,2.9774238410720577,72,3,0,1.86283720924902e-18,9.3141860462451e-18
+baselines,consistency,debate_r1,Log-odds Learned Weights,CAGE-CAL,auarc,1.3213515166855427,70,5,0,4.908877801858627e-16,1.963551120743451e-15
+baselines,consistency,debate_r1,Log-odds Learned Weights,CAGE-CAL,p_brier,1.8563350783140726,72,3,0,1.86283720924902e-18,1.490269767399216e-17
+baselines,consistency,debate_r1,Log-odds Learned Weights,LLM Elicited,auarc,2.9774238410720577,72,3,0,1.86283720924902e-18,1.117702325549412e-17
 baselines,consistency,debate_r1,Log-odds Learned Weights,LLM Elicited,p_brier,1.3325765202122004,67,8,0,5.049319131148891e-13,1.5147957393446672e-12
-baselines,consistency,debate_r2,Log-odds Learned Weights,Best Agent,auarc,7.636682273030826,75,0,0,2.6469779601696886e-23,2.117582368135751e-22
-baselines,consistency,debate_r2,Log-odds Learned Weights,Best Agent,p_brier,2.171325406175209,71,4,0,3.40355308261315e-17,2.04213184956789e-16
-baselines,consistency,debate_r2,Log-odds Learned Weights,LLM Elicited,auarc,4.246213256959075,73,2,0,7.546534164443782e-20,4.527920498666269e-19
+baselines,consistency,debate_r2,Log-odds Learned Weights,Best Agent,auarc,7.636682273030826,75,0,0,2.6469779601696886e-23,2.3822801641527197e-22
+baselines,consistency,debate_r2,Log-odds Learned Weights,Best Agent,p_brier,2.171325406175209,71,4,0,3.40355308261315e-17,2.382487157829205e-16
+baselines,consistency,debate_r2,Log-odds Learned Weights,CAGE-CAL,auarc,1.1786459112952286,66,9,0,3.829420351025133e-12,1.14882610530754e-11
+baselines,consistency,debate_r2,Log-odds Learned Weights,CAGE-CAL,p_brier,1.6669774343650108,71,4,0,3.40355308261315e-17,2.382487157829205e-16
+baselines,consistency,debate_r2,Log-odds Learned Weights,LLM Elicited,auarc,4.246213256959075,73,2,0,7.546534164443782e-20,5.282573915110647e-19
 baselines,consistency,debate_r2,Log-odds Learned Weights,LLM Elicited,p_brier,1.6065772998763204,69,6,0,5.820830689382727e-15,2.9104153446913634e-14
 spaces:consistency,consistency,voting,Log-odds Learned Weights,Prob. Learned Weights,auarc,0.008839494569845563,55,20,0,6.494900196551852e-05,0.00012989800393103704
 spaces:consistency,consistency,voting,Log-odds Learned Weights,Prob. Learned Weights,p_brier,-0.03528952388500012,26,49,0,0.01058211705170527,0.01058211705170527
