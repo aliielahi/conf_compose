@@ -63,6 +63,14 @@ def main():
             common &= np.isin(np.arange(len(labels)), saved[s]["scored"])
         print(f"\n{split}: {common.sum()} solutions ({(labels[common] >= 0).mean():.0%} wrong)   "
               f"step AUROC / solution AUROC / F1 at best threshold")
+        first = saved[scorers[0]]
+        length = np.zeros((len(labels), n_steps.max()))
+        np.add.at(length, (first["item"], first["step"]), 1)
+        # Controls: first errors tend to sit late and in long steps, whatever the scorer.
+        controls = {"step index": np.broadcast_to(np.arange(n_steps.max(), dtype=float), length.shape), "step length": length}
+        for name, scores in controls.items():
+            metrics = evaluate(percentile(scores[common]), labels[common], n_steps[common])
+            print(f"  {'control':<13} {name:<45} " + "  ".join(f"{m:.3f}" for m in metrics))
         for signal in SIGNALS:
             normalised = {s: percentile(step_scores(saved[s], signal)[common]) for s in scorers}
             normalised["panel (median)"] = np.nanmedian(np.stack(list(normalised.values())), axis=0)
