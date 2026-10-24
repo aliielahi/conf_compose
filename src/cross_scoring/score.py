@@ -4,51 +4,31 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-from transformers import AutoConfig, AutoTokenizer
-from vllm import LLM, SamplingParams
 
-from data.processbench import SPLITS, load
+from cross_scoring.teacher_forcing import encode, load, logprobs
+from data.processbench import SPLITS
+from data.processbench import load as load_split
 
 RUNS = Path(__file__).resolve().parents[2] / "runs" / "cross_scoring"
-MAX_TOKENS = 8192
-# Solutions per generate call; prompt log-probs of a whole split at once exhaust the GB10's shared memory.
-CHUNK = 100
-
-
-def encode(tokenizer, problem, steps):
-    """Chat-formatted token ids and the step index of every token (-1 outside the solution)."""
-    solution = "\n\n".join(steps)
-    text = tokenizer.apply_chat_template([{"role": "user", "content": problem},
-                                          {"role": "assistant", "content": solution}], tokenize=False)
-    start = text.rindex(solution)
-    bounds = np.cumsum([0] + [len(s) + 2 for s in steps[:-1]])
-    encoded = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
-    step = np.full(len(encoded.input_ids), -1)
-    for i, (begin, _) in enumerate(encoded.offset_mapping):
-        if 0 <= begin - start < len(solution):
-            step[i] = np.searchsorted(bounds, begin - start, side="right") - 1
-    return encoded.input_ids, step
 
 
 def score(llm, tokenizer, rows, limit):
     """Flat arrays over all solution tokens (item, step, log-prob of the token, of the top token) and scored items."""
-    encoded = [encode(tokenizer, row["problem"], row["steps"]) for row in rows]
+    encoded = []
+    for row in rows:
+        starts = np.cumsum([0] + [len(s) + 2 for s in row["steps"][:-1]])
+        encoded.append(encode(tokenizer, row["problem"], "\n\n".join(row["steps"]), starts))
     keep = [i for i, (ids, _) in enumerate(encoded) if len(ids) < limit]
+    wanted = [np.flatnonzero(encoded[i][1] >= 0) for i in keep]
+    scored = logprobs(llm, [encoded[i][0] for i in keep], wanted)
     columns = {"item": [], "step": [], "actual": [], "top": []}
-    for start in range(0, len(keep), CHUNK):
-        chunk = keep[start:start + CHUNK]
-        outputs = llm.generate([{"prompt_token_ids": encoded[i][0]} for i in chunk],
-                               SamplingParams(max_tokens=1, prompt_logprobs=1), use_tqdm=False)
-        for i, output in zip(chunk, outputs):
-            ids, step = encoded[i]
-            for t in np.flatnonzero(step >= 0):
-                candidates = output.prompt_logprobs[t]
-                columns["item"].append(i)
-                columns["step"].append(step[t])
-                columns["actual"].append(candidates[ids[t]].logprob)
-                columns["top"].append(max(c.logprob for c in candidates.values()))
-    columns["scored"] = keep
-    return {k: np.asarray(v, dtype=np.float32 if k in ("actual", "top") else np.int32) for k, v in columns.items()}
+    for i, positions, (actual, top) in zip(keep, wanted, scored):
+        columns["item"].append(np.full(len(positions), i))
+        columns["step"].append(encoded[i][1][positions])
+        columns["actual"].append(actual)
+        columns["top"].append(top)
+    out = {k: np.concatenate(v).astype(np.float32 if k in ("actual", "top") else np.int32) for k, v in columns.items()}
+    return {**out, "scored": np.array(keep, dtype=np.int32)}
 
 
 def main():
@@ -59,14 +39,12 @@ def main():
     out = RUNS / "scores" / args.model.replace("/", "__")
     if all((out / f"{split}.npz").exists() for split in args.splits):
         return
-    limit = min(MAX_TOKENS, getattr(AutoConfig.from_pretrained(args.model), "max_position_embeddings", MAX_TOKENS))
-    llm = LLM(args.model, max_model_len=limit, gpu_memory_utilization=0.6, trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    llm, tokenizer, limit = load(args.model)
     out.mkdir(parents=True, exist_ok=True)
     for split in args.splits:
         if (out / f"{split}.npz").exists():
             continue
-        rows = load(split)
+        rows = load_split(split)
         np.savez(out / f"{split}.npz", labels=np.array([r["label"] for r in rows]),
                  n_steps=np.array([len(r["steps"]) for r in rows]), **score(llm, tokenizer, rows, limit))
         print(f"{args.model} {split}: {len(rows)} solutions", flush=True)

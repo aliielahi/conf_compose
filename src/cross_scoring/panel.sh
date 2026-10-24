@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Score every ProcessBench split with every panel model (run inside the container).
+# Run one stage for every panel model, then evaluate (inside the container).
+# Usage: bash src/cross_scoring/panel.sh [score | solve | value]   (value needs solve for all models first)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -17,6 +18,6 @@ MODELS=(
 )
 
 for model in "${MODELS[@]}"; do
-  python -m cross_scoring.score --model "$model"
+  python -m "cross_scoring.${1:-score}" --model "$model"
 done
 python -m cross_scoring.evaluate | tee runs/cross_scoring/evaluation.txt
