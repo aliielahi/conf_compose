@@ -99,7 +99,7 @@ case "$command_name" in
         --env PYTHONUNBUFFERED=1 \
         --workdir /workspace \
         --entrypoint sleep "$IMAGE" infinity
-      install datasets "huggingface-hub<1.0"
+      install datasets scipy "huggingface-hub<1.0"
     fi
     check_gpu
     printf '\nReady on %s. Enter with: bash docker.sh shell\n' "$gpu"

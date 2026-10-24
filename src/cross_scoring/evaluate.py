@@ -9,7 +9,7 @@ from scipy.stats import rankdata
 from data.processbench import SPLITS
 
 RUNS = Path(__file__).resolve().parents[2] / "runs" / "cross_scoring"
-WINDOWS = (1, 8, 16)
+WINDOWS = (1, 8, 16, 32, None)  # None: mean over the whole step
 LENGTH_BINS = 5
 
 
@@ -38,7 +38,7 @@ def window_scores(saved, width):
     bounds = np.flatnonzero(np.diff(key)) + 1
     for segment in np.split(np.arange(len(key)), bounds):
         values = np.concatenate([[0.0], np.cumsum(surprise[segment])])
-        w = min(width, len(segment))
+        w = min(width or len(segment), len(segment))
         out[saved["item"][segment[0]], saved["step"][segment[0]]] = np.max(values[w:] - values[:-w]) / w
     return out
 
@@ -108,7 +108,7 @@ def main():
             print(f"  {'control':<20} {name:<45} " + "  ".join(f"{m:.3f}"
                                                               for m in evaluate(percentile(scores), labels, n_steps, length)))
         for width in WINDOWS:
-            report(f"surprise, {width}-token", {s: window_scores(saved[s], width)[common] for s in scorers},
+            report(f"surprise, {width}-token" if width else "surprise, step mean",{s: window_scores(saved[s], width)[common] for s in scorers},
                    labels, n_steps, length)
         believers = [s for s in scorers if (RUNS / "beliefs" / s / f"{split}.npz").exists()]
         if believers:
