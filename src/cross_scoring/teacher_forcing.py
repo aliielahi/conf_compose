@@ -7,12 +7,15 @@ from vllm import LLM, SamplingParams
 MAX_TOKENS = 8192
 # Prompts per generate call; prompt log-probs of a whole split at once exhaust the GB10's shared memory.
 CHUNK = 100
+# Prompt log-probs hold a full-vocabulary row per batched token (256k for Gemma), outside vLLM's memory budget.
+BATCHED_TOKENS = 4096
 
 
 def load(model):
     """vLLM engine, tokenizer and context limit of a scorer."""
     limit = min(MAX_TOKENS, getattr(AutoConfig.from_pretrained(model), "max_position_embeddings", MAX_TOKENS))
-    llm = LLM(model, max_model_len=limit, gpu_memory_utilization=0.6, trust_remote_code=True)
+    llm = LLM(model, max_model_len=limit, gpu_memory_utilization=0.5,
+              max_num_batched_tokens=BATCHED_TOKENS, trust_remote_code=True)
     return llm, AutoTokenizer.from_pretrained(model, trust_remote_code=True), limit
 
 

@@ -18,6 +18,6 @@ MODELS=(
 )
 
 for model in "${MODELS[@]}"; do
-  python -m "cross_scoring.${1:-score}" --model "$model"
+  python -m "cross_scoring.${1:-score}" --model "$model" || echo "failed: $model"
 done
 python -m cross_scoring.evaluate | tee runs/cross_scoring/evaluation.txt
